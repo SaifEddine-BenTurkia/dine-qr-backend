@@ -4,6 +4,7 @@ import {
   Get,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseGuards,
@@ -11,11 +12,22 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
+import { Transform } from 'class-transformer';
+import { Length, Matches } from 'class-validator';
 import type { Response } from 'express';
 import { CurrentUser, JwtAuthGuard, type AuthUser } from '../common/auth.guard';
 import { imageUploadOptions, requireFile } from '../common/image-upload';
 import { CreateRestaurantDto, UpdateRestaurantDto } from './restaurant.dto';
 import { RestaurantService } from './restaurant.service';
+
+class SlugQuery {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  @Length(3, 60)
+  slug: string;
+}
 
 const UPLOAD_LIMIT = { default: { ttl: 60_000, limit: 20 } };
 
@@ -29,6 +41,11 @@ export class RestaurantController {
   @Get()
   async get(@CurrentUser() user: AuthUser, @Res() res: Response) {
     res.json(await this.restaurants.get(user.id));
+  }
+
+  @Get('slug-available')
+  slugAvailable(@CurrentUser() user: AuthUser, @Query() query: SlugQuery) {
+    return this.restaurants.isSlugAvailable(user.id, query.slug);
   }
 
   @Post()

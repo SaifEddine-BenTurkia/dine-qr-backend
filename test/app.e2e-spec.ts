@@ -154,6 +154,11 @@ describe('TableQR API (e2e)', () => {
       .set(authed())
       .send({ name: 'Chez Amine', slug, primaryColor: '#c2410c' })
       .expect(201);
+    const taken = await http()
+      .get(`/restaurant/slug-available?slug=${slug}`)
+      .set(authed())
+      .expect(200);
+    expect(taken.body).toEqual({ available: true }); // own address
   });
 
   it('builds a menu and serves it publicly only with a live subscription', async () => {
@@ -196,12 +201,8 @@ describe('TableQR API (e2e)', () => {
       .send({ ids: [mains.body.id, drinks.body.id] })
       .expect(204);
 
-    await http().get(`/public/menu/${slug}`).expect(402);
-
-    const trial = await http()
-      .post('/subscription/start-trial')
-      .set(authed())
-      .expect(200);
+    // Creating the restaurant started the free trial: the menu is live.
+    const trial = await http().get('/subscription').set(authed()).expect(200);
     expect(trial.body).toMatchObject({
       status: 'trialing',
       currency: 'TND',
