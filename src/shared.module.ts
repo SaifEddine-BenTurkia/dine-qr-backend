@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { AdminAccess, AdminGuard } from './common/admin';
 import { JwtAuthGuard } from './common/auth.guard';
 import { MailService } from './mail/mail.service';
 import { MediaService } from './media/media.service';
@@ -20,10 +21,19 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
       }),
     }),
   ],
-  providers: [JwtAuthGuard, MailService, MediaService, RestaurantAccessService],
+  providers: [
+    JwtAuthGuard,
+    AdminAccess,
+    AdminGuard,
+    MailService,
+    MediaService,
+    RestaurantAccessService,
+  ],
   exports: [
     JwtModule,
     JwtAuthGuard,
+    AdminAccess,
+    AdminGuard,
     MailService,
     MediaService,
     RestaurantAccessService,

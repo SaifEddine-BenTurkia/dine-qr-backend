@@ -40,15 +40,16 @@ CLOUDINARY_API_SECRET=
 CLOUDINARY_FOLDER=tableqr
 CLOUDINARY_LIBRARY_FOLDER=tableqr-library
 
-PADDLE_ENV=sandbox
-PADDLE_API_KEY=
-PADDLE_WEBHOOK_SECRET=
-PADDLE_PRICE_ID=
+# Comma-separated admin accounts (confirm cash payments, get request emails).
+ADMIN_EMAILS=
+# WhatsApp in international format without "+", e.g. 21620123456.
+PAYMENT_WHATSAPP=
+PAYMENT_CONTACT_EMAIL=
+PAYMENT_PHONE=
 
 TRIAL_DAYS=30
 PRICE_TND=35
-PRICE_EUR=12
-PRICE_USD=12
+PAYMENT_PLAN_MONTHS=1,3,6,12
 
 OPENROUTER_API_KEYS=
 OPENROUTER_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free

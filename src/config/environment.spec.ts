@@ -16,9 +16,8 @@ const fullProduction = {
   CLOUDINARY_CLOUD_NAME: 'c',
   CLOUDINARY_API_KEY: 'c',
   CLOUDINARY_API_SECRET: 'c',
-  PADDLE_API_KEY: 'p',
-  PADDLE_WEBHOOK_SECRET: 'p',
   OPENROUTER_API_KEYS: 'o',
+  ADMIN_EMAILS: 'admin@example.com',
 };
 
 describe('validateEnvironment', () => {
@@ -32,16 +31,10 @@ describe('validateEnvironment', () => {
     );
   });
 
-  it('rejects an unknown Paddle environment', () => {
-    expect(() => validateEnvironment({ ...base, PADDLE_ENV: 'live' })).toThrow(
-      /PADDLE_ENV/,
-    );
-  });
-
   it('lists missing production variables', () => {
     expect(() =>
       validateEnvironment({ ...base, NODE_ENV: 'production' }),
-    ).toThrow(/PADDLE_API_KEY/);
+    ).toThrow(/ADMIN_EMAILS/);
   });
 
   it('rejects short production secrets', () => {

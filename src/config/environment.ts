@@ -14,9 +14,9 @@ const productionRequired = [
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET',
-  'PADDLE_API_KEY',
-  'PADDLE_WEBHOOK_SECRET',
   'OPENROUTER_API_KEYS',
+  // Who can confirm cash payments, and who is emailed about new requests.
+  'ADMIN_EMAILS',
 ] as const;
 
 const runtimeRequired = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -31,11 +31,6 @@ export function validateEnvironment(environment: Environment): Environment {
     throw new Error(
       `Missing required environment variables: ${missingRuntime.join(', ')}`,
     );
-  }
-
-  const paddleEnv = environment.PADDLE_ENV ?? 'sandbox';
-  if (paddleEnv !== 'sandbox' && paddleEnv !== 'production') {
-    throw new Error('PADDLE_ENV must be "sandbox" or "production"');
   }
 
   if (environment.NODE_ENV !== 'production') {

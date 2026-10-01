@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Prisma, UserTokenType, type User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
+import { AdminAccess } from '../common/admin';
 import type { JwtPayload } from '../common/auth.guard';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -41,6 +42,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly mail: MailService,
+    private readonly admins: AdminAccess,
   ) {}
 
   async register(input: RegisterDto) {
@@ -87,10 +89,11 @@ export class AuthService {
     return { token: await this.issueToken(user), user: toPublicUser(user) };
   }
 
-  async me(userId: string): Promise<PublicUser> {
+  async me(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException();
-    return toPublicUser(user);
+    // Only here, not in login/register: the dashboard reads it from /auth/me.
+    return { ...toPublicUser(user), isAdmin: this.admins.isAdmin(user.email) };
   }
 
   async verifyEmail(token: string) {

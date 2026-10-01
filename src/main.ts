@@ -8,8 +8,6 @@ import { configureApp } from './app.setup';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
-    // Paddle signs the exact bytes it sent, so webhooks need the raw body.
-    rawBody: true,
   });
   // Exactly one proxy (host nginx) sits between the container and Cloudflare.
   app.set('trust proxy', 1);

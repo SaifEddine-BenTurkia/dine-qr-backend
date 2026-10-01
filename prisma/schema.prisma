@@ -25,9 +25,10 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  restaurant   Restaurant?
-  subscription Subscription?
-  tokens       UserToken[]
+  restaurant      Restaurant?
+  subscription    Subscription?
+  tokens          UserToken[]
+  paymentRequests PaymentRequest[]
 }
 
 enum UserTokenType {
@@ -105,23 +106,61 @@ enum SubscriptionStatus {
   canceled
 }
 
+// One per user. Payments are collected in cash for now: an admin confirms a
+// PaymentRequest and that extends currentPeriodEnd.
 model Subscription {
-  id                   String             @id @default(uuid())
-  userId               String             @unique
-  status               SubscriptionStatus
-  currency             String
-  trialEndsAt          DateTime?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean            @default(false)
-  paddleCustomerId     String?
-  paddleSubscriptionId String?            @unique
-  // Paddle's updated_at of the last applied event; older deliveries are ignored
-  // because Paddle does not guarantee webhook order.
-  paddleUpdatedAt      DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id               String             @id @default(uuid())
+  userId           String             @unique
+  status           SubscriptionStatus
+  currency         String             @default("TND")
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum PaymentContactMethod {
+  WHATSAPP
+  EMAIL
+  PHONE
+}
+
+enum PaymentRequestStatus {
+  PENDING
+  PAID
+  REJECTED
+  CANCELED
+}
+
+// The manual payment queue: an owner asks to pay, an admin collects the cash
+// and marks it paid.
+model PaymentRequest {
+  id             String               @id @default(uuid())
+  // Short code the owner quotes on WhatsApp or by phone, e.g. TQ-7F3K2A.
+  reference      String               @unique
+  userId         String
+  months         Int
+  amount         Decimal              @db.Decimal(10, 3)
+  currency       String               @default("TND")
+  contactMethod  PaymentContactMethod
+  note           String?
+  status         PaymentRequestStatus @default(PENDING)
+  amountReceived Decimal?             @db.Decimal(10, 3)
+  adminNote      String?
+  handledBy      String?
+  handledAt      DateTime?
+  // Paid period this request granted, kept for the audit trail.
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Scan {
@@ -147,10 +186,4 @@ model Feedback {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId, createdAt])
-}
-
-// Paddle retries webhooks; recording handled event ids makes processing idempotent.
-model ProcessedWebhookEvent {
-  id          String   @id
-  processedAt DateTime @default(now())
 }

@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ThrottlerStorage } from '@nestjs/throttler';
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
@@ -22,6 +22,23 @@ class CapturingMail {
     this.reset.set(to, token);
     return Promise.resolve();
   }
+  sent: string[] = [];
+  notifyAdminsOfPaymentRequest(to: string[]) {
+    this.sent.push(`admins:${to.join(',')}`);
+    return Promise.resolve();
+  }
+  sendPaymentRequestReceived(to: string) {
+    this.sent.push(`received:${to}`);
+    return Promise.resolve();
+  }
+  sendPaymentConfirmed(to: string) {
+    this.sent.push(`confirmed:${to}`);
+    return Promise.resolve();
+  }
+  sendPaymentRejected(to: string) {
+    this.sent.push(`rejected:${to}`);
+    return Promise.resolve();
+  }
 }
 
 // Unlimited rate limiting: the suite makes many requests from one address.
@@ -35,7 +52,8 @@ const noThrottling = {
     }),
 };
 
-const WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET ?? '';
+// Listed in ADMIN_EMAILS by e2e-env.ts.
+const ADMIN_EMAIL = 'e2e-admin@example.com';
 
 describe('TableQR API (e2e)', () => {
   let app: INestApplication<App>;
@@ -52,14 +70,17 @@ describe('TableQR API (e2e)', () => {
       .overrideProvider(ThrottlerStorage)
       .useValue(noThrottling)
       .compile();
-    app = moduleRef.createNestApplication({ rawBody: true });
+    app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await prisma.user.deleteMany({ where: { email: ADMIN_EMAIL } });
   });
 
   afterAll(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+    await prisma.user.deleteMany({
+      where: { email: { in: [email, ADMIN_EMAIL] } },
+    });
     await app.close();
   });
 
@@ -219,48 +240,111 @@ describe('TableQR API (e2e)', () => {
     expect(list.body[0]).toMatchObject({ rating: 5, comment: 'Excellent' });
   });
 
-  it('applies signed Paddle webhooks once and rejects unsigned ones', async () => {
-    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-    const event = {
-      event_id: `evt_${randomUUID()}`,
-      event_type: 'subscription.activated',
-      occurred_at: new Date().toISOString(),
-      data: {
-        id: `sub_${randomUUID()}`,
-        status: 'active',
-        customer_id: 'ctm_test',
-        updated_at: new Date().toISOString(),
-        custom_data: { userId: user.id },
-        current_billing_period: {
-          starts_at: new Date().toISOString(),
-          ends_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-        },
-        scheduled_change: null,
-      },
-    };
-    const body = JSON.stringify(event);
-    const ts = Math.floor(Date.now() / 1000);
-    const h1 = createHmac('sha256', WEBHOOK_SECRET)
-      .update(`${ts}:${body}`)
-      .digest('hex');
+  it('queues a cash payment that only an admin can confirm', async () => {
+    const created = await http()
+      .post('/subscription/payment-requests')
+      .set(authed())
+      .send({ months: 3, contactMethod: 'WHATSAPP', note: 'Je passe demain' })
+      .expect(201);
+    expect(created.body).toMatchObject({
+      months: 3,
+      amount: 105,
+      currency: 'TND',
+      status: 'PENDING',
+    });
+    expect(created.body.reference).toMatch(/^TQ-[A-Z2-9]{6}$/);
+    expect(mail.sent).toEqual(
+      expect.arrayContaining([`admins:${ADMIN_EMAIL}`, `received:${email}`]),
+    );
 
+    // One open request at a time; months must be an offered plan.
     await http()
-      .post('/webhooks/paddle')
-      .set('Content-Type', 'application/json')
-      .send(body)
-      .expect(401);
-
-    for (let i = 0; i < 2; i++) {
-      await http()
-        .post('/webhooks/paddle')
-        .set('Content-Type', 'application/json')
-        .set('Paddle-Signature', `ts=${ts};h1=${h1}`)
-        .send(body)
-        .expect(200);
-    }
+      .post('/subscription/payment-requests')
+      .set(authed())
+      .send({ months: 1, contactMethod: 'EMAIL' })
+      .expect(409);
 
     const sub = await http().get('/subscription').set(authed()).expect(200);
-    expect(sub.body.status).toBe('active');
+    expect(sub.body.pendingRequest.reference).toBe(created.body.reference);
+    expect(sub.body.plans).toEqual([
+      { months: 1, amount: 35 },
+      { months: 3, amount: 105 },
+      { months: 6, amount: 210 },
+      { months: 12, amount: 420 },
+    ]);
+    const trialEndsAt = new Date(sub.body.trialEndsAt);
+
+    // Owners cannot reach the admin queue.
+    await http().get('/admin/payment-requests').set(authed()).expect(403);
+
+    const admin = await http()
+      .post('/auth/register')
+      .send({
+        email: ADMIN_EMAIL,
+        password: 'admin-password',
+        fullName: 'Admin',
+      })
+      .expect(201);
+    await http()
+      .get(`/auth/verify-email?token=${mail.verification.get(ADMIN_EMAIL)}`)
+      .expect(200);
+    const asAdmin = { Authorization: `Bearer ${admin.body.token}` };
+    const me = await http().get('/auth/me').set(asAdmin).expect(200);
+    expect(me.body.isAdmin).toBe(true);
+
+    const queue = await http()
+      .get('/admin/payment-requests?status=PENDING')
+      .set(asAdmin)
+      .expect(200);
+    expect(queue.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reference: created.body.reference,
+          owner: expect.objectContaining({ email }),
+          restaurant: expect.objectContaining({ slug }),
+        }),
+      ]),
+    );
+
+    await http()
+      .post(`/admin/payment-requests/${created.body.id}/mark-paid`)
+      .set(asAdmin)
+      .send({ amountReceived: 105, adminNote: 'Espèces reçues' })
+      .expect(200);
+    // A second click cannot extend the subscription twice.
+    await http()
+      .post(`/admin/payment-requests/${created.body.id}/mark-paid`)
+      .set(asAdmin)
+      .send({})
+      .expect(409);
+    expect(mail.sent).toContain(`confirmed:${email}`);
+
+    // Paid months are added after the remaining trial, not from today.
+    const paid = await http().get('/subscription').set(authed()).expect(200);
+    expect(paid.body.status).toBe('active');
+    expect(paid.body.pendingRequest).toBeNull();
+    const periodEnd = new Date(paid.body.currentPeriodEnd);
+    const monthsAfterTrial =
+      (periodEnd.getUTCFullYear() - trialEndsAt.getUTCFullYear()) * 12 +
+      periodEnd.getUTCMonth() -
+      trialEndsAt.getUTCMonth();
+    expect(monthsAfterTrial).toBe(3);
+    await http().get(`/public/menu/${slug}`).expect(200);
+
+    // The owner can withdraw a request they no longer need.
+    const another = await http()
+      .post('/subscription/payment-requests')
+      .set(authed())
+      .send({ months: 1, contactMethod: 'PHONE' })
+      .expect(201);
+    await http()
+      .post(`/subscription/payment-requests/${another.body.id}/cancel`)
+      .set(authed())
+      .expect(204);
+    await http()
+      .post(`/subscription/payment-requests/${another.body.id}/cancel`)
+      .set(authed())
+      .expect(404);
   });
 
   it('resets the password and signs out older sessions', async () => {

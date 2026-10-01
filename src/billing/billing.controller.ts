@@ -1,20 +1,77 @@
 import {
+  Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
+  Param,
+  ParseUUIDPipe,
   Post,
-  Req,
-  UnauthorizedException,
+  Query,
   UseGuards,
-  type RawBodyRequest,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { SkipThrottle, Throttle } from '@nestjs/throttler';
-import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import { PaymentContactMethod, PaymentRequestStatus } from '@prisma/client';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { AdminGuard } from '../common/admin';
 import { CurrentUser, JwtAuthGuard, type AuthUser } from '../common/auth.guard';
 import { BillingService } from './billing.service';
-import { verifyPaddleSignature, type PaddleSubscriptionEvent } from './paddle';
+
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+
+class CreatePaymentRequestDto {
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  months: number;
+
+  @IsEnum(PaymentContactMethod)
+  contactMethod: PaymentContactMethod;
+
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+class AdminListQuery {
+  @IsOptional()
+  @IsEnum(PaymentRequestStatus)
+  status?: PaymentRequestStatus;
+}
+
+class MarkPaidDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0)
+  amountReceived?: number;
+
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  adminNote?: string;
+}
+
+class RejectDto {
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  adminNote?: string;
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('subscription')
@@ -32,44 +89,58 @@ export class SubscriptionController {
     return this.billing.startTrial(user.id);
   }
 
-  @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  @HttpCode(200)
-  @Post('checkout')
-  checkout(@CurrentUser() user: AuthUser) {
-    return this.billing.checkout(user.id);
+  @Get('payment-requests')
+  listRequests(@CurrentUser() user: AuthUser) {
+    return this.billing.listMyRequests(user.id);
+  }
+
+  // Each request emails the admins, so it is limited well below browsing.
+  @Throttle({ default: { ttl: 60 * 60_000, limit: 10 } })
+  @Post('payment-requests')
+  createRequest(
+    @CurrentUser() user: AuthUser,
+    @Body() body: CreatePaymentRequestDto,
+  ) {
+    return this.billing.createPaymentRequest(user.id, body);
   }
 
   @HttpCode(204)
-  @Post('cancel')
-  cancel(@CurrentUser() user: AuthUser) {
-    return this.billing.cancel(user.id);
+  @Post('payment-requests/:id/cancel')
+  cancelRequest(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.billing.cancelPaymentRequest(user.id, id);
   }
 }
 
-@SkipThrottle()
-@Controller('webhooks')
-export class PaddleWebhookController {
-  constructor(
-    private readonly billing: BillingService,
-    private readonly config: ConfigService,
-  ) {}
+@UseGuards(JwtAuthGuard, AdminGuard)
+@Controller('admin/payment-requests')
+export class AdminPaymentsController {
+  constructor(private readonly billing: BillingService) {}
+
+  @Get()
+  list(@Query() query: AdminListQuery) {
+    return this.billing.adminList(query.status);
+  }
 
   @HttpCode(200)
-  @Post('paddle')
-  async paddle(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers('paddle-signature') signature: string | undefined,
+  @Post(':id/mark-paid')
+  markPaid(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: MarkPaidDto,
   ) {
-    const secret = this.config.get<string>('PADDLE_WEBHOOK_SECRET') ?? '';
-    if (
-      !req.rawBody ||
-      !verifyPaddleSignature(signature, req.rawBody, secret)
-    ) {
-      throw new UnauthorizedException('Invalid signature');
-    }
-    await this.billing.handleWebhook(
-      JSON.parse(req.rawBody.toString('utf8')) as PaddleSubscriptionEvent,
-    );
-    return { received: true };
+    return this.billing.markPaid(id, admin.email, body);
+  }
+
+  @HttpCode(200)
+  @Post(':id/reject')
+  reject(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: RejectDto,
+  ) {
+    return this.billing.reject(id, admin.email, body.adminNote);
   }
 }

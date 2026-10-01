@@ -2,6 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 
+export interface PaymentRequestEmail {
+  reference: string;
+  months: number;
+  amount: number;
+  currency: string;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -52,10 +59,127 @@ export class MailService {
     );
   }
 
-  private async send(to: string, subject: string, html: string, link: string) {
+  /** Tells the admins a restaurant wants to pay, with what they need to call back. */
+  async notifyAdminsOfPaymentRequest(
+    to: string[],
+    request: PaymentRequestEmail & {
+      ownerName: string;
+      ownerEmail: string;
+      ownerPhone: string | null;
+      restaurantName: string | null;
+      contactMethod: string;
+      note: string | null;
+    },
+  ) {
+    if (to.length === 0) return;
+    const link = `${this.frontendUrl}/admin/payments`;
+    const rows = [
+      ['Référence', request.reference],
+      ['Restaurant', request.restaurantName ?? '(pas encore créé)'],
+      ['Propriétaire', request.ownerName],
+      ['Email', request.ownerEmail],
+      ['Téléphone', request.ownerPhone ?? '—'],
+      ['Durée', `${request.months} mois`],
+      ['Montant', `${request.amount} ${request.currency}`],
+      ['Contact préféré', request.contactMethod],
+      ['Message', request.note ?? '—'],
+    ]
+      .map(
+        ([label, value]) =>
+          `<tr><td style="padding:4px 12px 4px 0;color:#777">${label}</td><td style="padding:4px 0"><b>${escapeHtml(value)}</b></td></tr>`,
+      )
+      .join('');
+    await this.send(
+      to,
+      `Nouvelle demande de paiement ${request.reference} — ${request.amount} ${request.currency}`,
+      layout(
+        'Bonjour,',
+        `Une demande de paiement en espèces attend votre traitement.<br><br><table>${rows}</table>`,
+        'Ouvrir la file des paiements',
+        link,
+        'Marquez la demande comme payée une fois l’argent reçu : l’abonnement est prolongé automatiquement.',
+      ),
+      link,
+    );
+  }
+
+  async sendPaymentRequestReceived(
+    to: string,
+    fullName: string,
+    request: PaymentRequestEmail,
+  ) {
+    const link = `${this.frontendUrl}/dashboard/billing`;
+    await this.send(
+      to,
+      `Demande de paiement ${request.reference} reçue — TableQR`,
+      layout(
+        `Bonjour ${escapeHtml(fullName)},`,
+        `Nous avons bien reçu votre demande d’abonnement de <b>${request.months} mois</b> pour <b>${request.amount} ${request.currency}</b>.<br><br>Référence : <b>${escapeHtml(request.reference)}</b><br><br>Le paiement se fait en espèces : notre équipe vous contacte pour convenir de la remise. Votre abonnement est activé dès réception.`,
+        'Voir mon abonnement',
+        link,
+        'Indiquez votre référence dans tous vos échanges avec nous.',
+      ),
+      link,
+    );
+  }
+
+  async sendPaymentConfirmed(
+    to: string,
+    fullName: string,
+    request: PaymentRequestEmail & { periodEnd: Date },
+  ) {
+    const link = `${this.frontendUrl}/dashboard/billing`;
+    const until = request.periodEnd.toLocaleDateString('fr-FR', {
+      timeZone: 'Africa/Tunis',
+    });
+    await this.send(
+      to,
+      'Paiement reçu, abonnement actif — TableQR',
+      layout(
+        `Bonjour ${escapeHtml(fullName)},`,
+        `Nous avons bien reçu votre paiement de <b>${request.amount} ${request.currency}</b> (référence ${escapeHtml(request.reference)}). Votre abonnement est actif jusqu’au <b>${until}</b>. Merci !`,
+        'Voir mon abonnement',
+        link,
+        'Gardez cet email comme justificatif de paiement.',
+      ),
+      link,
+    );
+  }
+
+  async sendPaymentRejected(
+    to: string,
+    fullName: string,
+    request: PaymentRequestEmail & { adminNote: string | null },
+  ) {
+    const link = `${this.frontendUrl}/dashboard/billing`;
+    const reason = request.adminNote
+      ? `<br><br>Motif : ${escapeHtml(request.adminNote)}`
+      : '';
+    await this.send(
+      to,
+      `Demande de paiement ${request.reference} clôturée — TableQR`,
+      layout(
+        `Bonjour ${escapeHtml(fullName)},`,
+        `Votre demande de paiement ${escapeHtml(request.reference)} a été clôturée sans paiement.${reason}<br><br>Vous pouvez en créer une nouvelle à tout moment depuis votre espace.`,
+        'Voir mon abonnement',
+        link,
+        'Une question ? Répondez simplement à cet email.',
+      ),
+      link,
+    );
+  }
+
+  private async send(
+    to: string | string[],
+    subject: string,
+    html: string,
+    link: string,
+  ) {
     if (!this.resend) {
       // Development without a Resend key: the link is all you need to continue.
-      this.logger.warn(`RESEND_API_KEY not set; email to ${to}: ${link}`);
+      this.logger.warn(
+        `RESEND_API_KEY not set; email "${subject}" to ${String(to)}: ${link}`,
+      );
       return;
     }
     const { error } = await this.resend.emails.send({
@@ -65,7 +189,7 @@ export class MailService {
       html,
     });
     if (error) {
-      this.logger.error(`Resend failed for ${to}: ${error.message}`);
+      this.logger.error(`Resend failed for ${String(to)}: ${error.message}`);
       throw new Error('Email delivery failed');
     }
   }

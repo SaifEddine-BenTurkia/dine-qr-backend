@@ -6,7 +6,8 @@ scanning a QR code. Frontend: `dine-qr-style` (Cloudflare Pages).
 | | |
 |---|---|
 | Stack | NestJS 11, Prisma 6, PostgreSQL 17, Node 22 |
-| Integrations | Paddle (billing), Cloudinary (images), Resend (email), OpenRouter (AI menu import) |
+| Integrations | Cloudinary (images), Resend (email), OpenRouter (AI menu import) |
+| Payments | Cash, Tunisia only: owners queue a payment request, an admin confirms it |
 | Production | `https://menu-api.arishub.site` on the shared ArisHub VPS |
 
 ## Local development
@@ -20,7 +21,8 @@ npm run start:dev             # http://localhost:3001
 ```
 
 Without a Resend key, verification and reset links are printed in the API logs.
-Cloudinary, Paddle and OpenRouter endpoints answer 503 until their keys are set.
+Cloudinary and OpenRouter endpoints answer 503 until their keys are set.
+Put your own email in `ADMIN_EMAILS` to see the payment queue at `/admin/payments`.
 
 | Command | |
 |---|---|
@@ -32,13 +34,13 @@ Cloudinary, Paddle and OpenRouter endpoints answer 503 until their keys are set.
 ## API
 
 Errors are always `{ "statusCode": number, "message": string }`.
-🔒 = `Authorization: Bearer <token>` and a verified email.
+🔒 = `Authorization: Bearer <token>` and a verified email. 👑 = the account's email is in `ADMIN_EMAILS`.
 
 | Method | Path | |
 |---|---|---|
 | POST | `/auth/register` | `{ email, password, fullName, phone?, phoneCountryCode?, country?, address?, taxId? }` → `{ token, user }`, sends a verification email |
 | POST | `/auth/login` | `{ email, password }` → `{ token, user }` |
-| GET | `/auth/me` | token required, email may be unverified |
+| GET | `/auth/me` | token required, email may be unverified; includes `isAdmin` |
 | GET | `/auth/verify-email?token=` | single use, 24 h |
 | POST | `/auth/resend-verification` | `{ email }` |
 | POST | `/auth/forgot-password` | `{ email }`, same answer whether or not the account exists |
@@ -54,20 +56,34 @@ Errors are always `{ "statusCode": number, "message": string }`.
 | POST | `/dishes/:id/image` 🔒 | multipart `file` → `{ imageUrl }` |
 | GET | `/library/folders`, `/library/images?folder=` 🔒 | shared stock photos from Cloudinary |
 | POST | `/ai/menu-import` 🔒 | multipart `file` (menu photo) → `{ dishes }`, 10 per hour |
-| GET | `/subscription` 🔒 | `{ status, trialEndsAt, currentPeriodEnd, cancelAtPeriodEnd, pricePerMonth, currency }` |
+| GET | `/subscription` 🔒 | `{ status, trialEndsAt, currentPeriodEnd, pricePerMonth, currency, plans, pendingRequest, paymentContact }` |
 | POST | `/subscription/start-trial` 🔒 | once per account |
-| POST | `/subscription/checkout` 🔒 | → `{ transactionId }` for `Paddle.Checkout.open` |
-| POST | `/subscription/cancel` 🔒 | takes effect at the end of the paid period |
+| GET | `/subscription/payment-requests` 🔒 | the owner's payment history |
+| POST | `/subscription/payment-requests` 🔒 | `{ months, contactMethod: WHATSAPP\|EMAIL\|PHONE, note? }`; one open request at a time; emails the admins |
+| POST | `/subscription/payment-requests/:id/cancel` 🔒 | withdraw an open request |
+| GET | `/admin/payment-requests?status=PENDING` 🔒👑 | the queue, with owner contact and restaurant |
+| POST | `/admin/payment-requests/:id/mark-paid` 🔒👑 | `{ amountReceived?, adminNote? }`; extends the subscription |
+| POST | `/admin/payment-requests/:id/reject` 🔒👑 | `{ adminNote? }` |
 | GET | `/stats/scans?days=7` 🔒 | `[{ date, count }]`, days without scans included |
 | GET | `/restaurants/feedback` 🔒 | |
 | GET | `/public/menu/:slug` | 402 unless the subscription is trialing or active; unavailable dishes hidden |
 | POST | `/public/menu/:slug/scan` | counted once per visitor per 30 min |
 | POST | `/public/menu/:slug/feedback` | `{ rating: 1-5, comment? }` |
-| POST | `/webhooks/paddle` | Paddle notifications, signature-verified |
 | GET | `/health/live`, `/health/ready` | |
 
-Prices shown to the owner depend on the country given at sign-up:
-Tunisia → TND, euro countries → EUR, everyone else → USD (`PRICE_*` variables).
+### Payments (cash)
+
+1. The owner picks a duration on the billing page (`PAYMENT_PLAN_MONTHS` ×
+   `PRICE_TND`) and sends a request. It gets a reference like `TQ-7F3K2A`, and
+   the admins receive an email.
+2. The owner contacts you on WhatsApp, by email or by phone (`PAYMENT_*`
+   variables; the WhatsApp button pre-fills the reference), and you collect the cash.
+3. In `/admin/payments`, you click **Marquer payé**. The subscription is extended
+   by the months paid, counted from the end of any remaining trial or paid
+   period, and the owner gets a confirmation email.
+
+When a paid period ends, the status becomes `past_due` and the public menu
+answers 402 until the next payment. Nothing has to run on a schedule for this.
 
 ## Production
 
@@ -169,12 +185,9 @@ Dumps stay on the VPS disk. Copy them somewhere else as well (provider
 snapshots, or rclone to object storage).
 
 **7. Third-party accounts.**
-- **Paddle:** create one monthly product and price, with country price
-  overrides for EUR and USD, and put its `pri_…` id in `PADDLE_PRICE_ID`. Add a
-  notification destination `https://menu-api.arishub.site/webhooks/paddle` for
-  the `subscription.*` events and put its secret in `PADDLE_WEBHOOK_SECRET`. In
-  Checkout settings, set the default payment link to `https://menu.arishub.site`.
-  For live payments, the domain must also be approved by Paddle.
+- **Payments:** set `ADMIN_EMAILS` to your account's email (register on the
+  site first) and fill in `PAYMENT_WHATSAPP` (e.g. `21620123456`, no `+`),
+  `PAYMENT_CONTACT_EMAIL` and `PAYMENT_PHONE`.
 - **Cloudinary:** create `tableqr-library/<Category>` folders (for example
   `Pizzas`, `Boissons`) holding stock photos. They appear in the image library
   picker.

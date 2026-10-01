@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import {
-  PaddleWebhookController,
+  AdminPaymentsController,
   SubscriptionController,
 } from './billing.controller';
 import { BillingService } from './billing.service';
 
 @Module({
-  controllers: [SubscriptionController, PaddleWebhookController],
+  controllers: [SubscriptionController, AdminPaymentsController],
   providers: [BillingService],
 })
 export class BillingModule {}
