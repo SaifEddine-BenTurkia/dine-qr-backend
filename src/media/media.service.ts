@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
+import { describe } from '../common/http-exception.filter';
 
 export interface LibraryFolder {
   name: string;
@@ -72,7 +73,7 @@ export class MediaService {
       );
       stream.end(file.buffer);
     }).catch((error: unknown) => {
-      this.logger.error(`Cloudinary upload failed: ${String(error)}`);
+      this.logger.error(`Cloudinary upload failed: ${describe(error)}`);
       throw new ServiceUnavailableException("Échec de l'envoi de l'image");
     });
     return result.secure_url;
@@ -80,9 +81,16 @@ export class MediaService {
 
   async listLibraryFolders(): Promise<LibraryFolder[]> {
     this.ensureConfigured();
-    const response = (await cloudinary.api.sub_folders(this.libraryFolder)) as {
-      folders: { name: string; path: string }[];
-    };
+    let response: { folders: { name: string; path: string }[] };
+    try {
+      response = (await cloudinary.api.sub_folders(this.libraryFolder)) as {
+        folders: { name: string; path: string }[];
+      };
+    } catch (error) {
+      // No library folder yet is a normal, empty library.
+      if (httpCode(error) === 404) return [];
+      throw this.libraryUnavailable(error);
+    }
     return response.folders
       .map((folder) => ({ name: folder.name, path: folder.path }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
@@ -97,13 +105,18 @@ export class MediaService {
     // Accounts on Cloudinary's newer "dynamic folders" mode index assets by
     // asset_folder; older "fixed folders" accounts by folder. Try both.
     for (const field of ['asset_folder', 'folder']) {
-      const response = (await cloudinary.search
-        .expression(`${field}="${path}" AND resource_type:image`)
-        .sort_by('public_id', 'asc')
-        .max_results(200)
-        .execute()) as {
-        resources: { public_id: string; secure_url: string }[];
-      };
+      let response: { resources: { public_id: string; secure_url: string }[] };
+      try {
+        response = (await cloudinary.search
+          .expression(`${field}="${path}" AND resource_type:image`)
+          .sort_by('public_id', 'asc')
+          .max_results(200)
+          .execute()) as {
+          resources: { public_id: string; secure_url: string }[];
+        };
+      } catch (error) {
+        throw this.libraryUnavailable(error);
+      }
       if (response.resources.length > 0) {
         return response.resources.map((resource) => ({
           publicId: resource.public_id,
@@ -114,6 +127,13 @@ export class MediaService {
     return [];
   }
 
+  private libraryUnavailable(error: unknown) {
+    this.logger.error(`Cloudinary library request failed: ${describe(error)}`);
+    return new ServiceUnavailableException(
+      "La bibliothèque d'images est indisponible",
+    );
+  }
+
   private ensureConfigured() {
     if (!this.configured) {
       throw new ServiceUnavailableException(
@@ -121,4 +141,13 @@ export class MediaService {
       );
     }
   }
+}
+
+// Cloudinary's admin API rejects with { error: { http_code } }, not an Error.
+function httpCode(error: unknown): number | undefined {
+  const record = error as {
+    error?: { http_code?: number };
+    http_code?: number;
+  };
+  return record?.error?.http_code ?? record?.http_code;
 }

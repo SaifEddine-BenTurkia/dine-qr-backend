@@ -35,10 +35,36 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    this.logger.error(exception instanceof Error ? exception.stack : exception);
+    this.logger.error(describe(exception));
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Une erreur interne est survenue',
     });
   }
+}
+
+/**
+ * A loggable summary of anything thrown. Plain objects are never logged
+ * whole: SDKs (Cloudinary's, for one) reject with objects that carry the
+ * request options, credentials included.
+ */
+export function describe(exception: unknown): string {
+  if (exception instanceof Error) return exception.stack ?? exception.message;
+  if (exception && typeof exception === 'object') {
+    const record = exception as {
+      message?: unknown;
+      http_code?: unknown;
+      error?: { message?: unknown; http_code?: unknown };
+    };
+    const message = record.error?.message ?? record.message;
+    const code = record.error?.http_code ?? record.http_code;
+    const status =
+      typeof code === 'number' || typeof code === 'string'
+        ? ` (HTTP ${code})`
+        : '';
+    return `Non-Error thrown${status}: ${
+      typeof message === 'string' ? message : 'no message'
+    }`;
+  }
+  return `Non-Error thrown: ${String(exception)}`;
 }

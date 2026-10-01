@@ -1,5 +1,4 @@
 import {
-  BadGatewayException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -101,16 +100,18 @@ export class AiService {
         const data = (await response.json()) as {
           choices?: { message?: { content?: string } }[];
         };
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) throw new Error('Empty completion');
-        return content;
+        // An empty answer is the model failing to read the image, not the
+        // provider being down: the caller reports it as an unreadable menu.
+        return data.choices?.[0]?.message?.content ?? '';
       } catch (error) {
         this.logger.warn(
           `OpenRouter attempt ${attempt + 1} failed: ${String(error)}`,
         );
       }
     }
-    throw new BadGatewayException(
+    // 503, not 502: Cloudflare replaces 502 responses with its own HTML page,
+    // and the owner would never see this message.
+    throw new ServiceUnavailableException(
       "Le service d'IA est indisponible, réessayez plus tard",
     );
   }
