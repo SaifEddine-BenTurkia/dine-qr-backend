@@ -135,6 +135,19 @@ describe('TableQR API (e2e)', () => {
   it('returns JSON null before the restaurant exists, then creates it', async () => {
     const empty = await http().get('/restaurant').set(authed()).expect(200);
     expect(empty.text).toBe('null');
+    // Lists are simply empty before setup, not errors.
+    const noCategories = await http()
+      .get('/categories')
+      .set(authed())
+      .expect(200);
+    expect(noCategories.body).toEqual([]);
+    await http().get('/stats/scans?days=7').set(authed()).expect(200);
+    // Creating something still explains what is missing.
+    await http()
+      .post('/categories')
+      .set(authed())
+      .send({ name: 'Boissons' })
+      .expect(404);
 
     await http()
       .post('/restaurant')

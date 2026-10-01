@@ -16,7 +16,8 @@ export class CategoriesService {
   ) {}
 
   async list(userId: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.access.restaurantIdOrNull(userId);
+    if (!restaurantId) return [];
     const categories = await this.prisma.category.findMany({
       where: { restaurantId },
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],

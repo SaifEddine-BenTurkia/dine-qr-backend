@@ -52,7 +52,7 @@ PRICE_TND=35
 PAYMENT_PLAN_MONTHS=1,3,6,12
 
 OPENROUTER_API_KEYS=
-OPENROUTER_MODEL=qwen/qwen3.8-27b:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,google/gemma-4-31b-it:free
+OPENROUTER_MODEL=qwen/qwen3.8-27b:free,mistralai/mistral-small-3.2-24b-instruct
 EOF
 
 chmod 600 "${env_file}"

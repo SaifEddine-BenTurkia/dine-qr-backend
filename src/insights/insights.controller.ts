@@ -26,7 +26,8 @@ export class InsightsController {
   /** Scans per day for the last N days, oldest first, with empty days as 0. */
   @Get('stats/scans')
   async scans(@CurrentUser() user: AuthUser, @Query() query: ScanStatsQuery) {
-    const restaurantId = await this.access.restaurantIdFor(user.id);
+    const restaurantId = await this.access.restaurantIdOrNull(user.id);
+    if (!restaurantId) return [];
     const rows = await this.prisma.$queryRaw<{ date: string; count: number }[]>(
       Prisma.sql`
         SELECT to_char(day, 'YYYY-MM-DD') AS date, COALESCE(s.count, 0)::int AS count
@@ -49,7 +50,8 @@ export class InsightsController {
 
   @Get('restaurants/feedback')
   async feedback(@CurrentUser() user: AuthUser) {
-    const restaurantId = await this.access.restaurantIdFor(user.id);
+    const restaurantId = await this.access.restaurantIdOrNull(user.id);
+    if (!restaurantId) return [];
     return this.prisma.feedback.findMany({
       where: { restaurantId },
       orderBy: { createdAt: 'desc' },

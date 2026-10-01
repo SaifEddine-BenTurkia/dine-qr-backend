@@ -18,7 +18,8 @@ export class DishesService {
   ) {}
 
   async list(userId: string, categoryId?: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.access.restaurantIdOrNull(userId);
+    if (!restaurantId) return [];
     const dishes = await this.prisma.dish.findMany({
       where: { category: { restaurantId }, ...(categoryId && { categoryId }) },
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],

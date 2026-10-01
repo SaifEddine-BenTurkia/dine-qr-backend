@@ -107,6 +107,11 @@ export class AiService {
         },
         body: JSON.stringify({
           model,
+          // Without a cap OpenRouter reserves the model's maximum output
+          // against the account balance, and paid models are refused on a
+          // small balance. A 100-dish menu needs ~4k tokens; reasoning models
+          // spend more before answering.
+          max_tokens: 8000,
           messages: [
             {
               role: 'user',

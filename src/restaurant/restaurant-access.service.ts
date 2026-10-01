@@ -10,13 +10,22 @@ export class RestaurantAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
   async restaurantIdFor(userId: string): Promise<string> {
+    const restaurantId = await this.restaurantIdOrNull(userId);
+    if (!restaurantId) {
+      throw new NotFoundException("Créez d'abord votre restaurant");
+    }
+    return restaurantId;
+  }
+
+  /**
+   * For read-only lists: an owner who has not set up a restaurant yet simply
+   * has nothing to list, which is not an error.
+   */
+  async restaurantIdOrNull(userId: string): Promise<string | null> {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { userId },
       select: { id: true },
     });
-    if (!restaurant) {
-      throw new NotFoundException("Créez d'abord votre restaurant");
-    }
-    return restaurant.id;
+    return restaurant?.id ?? null;
   }
 }
