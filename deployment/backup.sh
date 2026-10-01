@@ -16,8 +16,13 @@ mkdir -p backups
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="backups/nightly-${timestamp}.dump"
+# A failed dump must not leave a file that looks like a backup.
+trap 'rm -f "${target}.partial"' ERR
 
-docker compose --env-file .env.production -f compose.production.yml exec -T postgres \
+# .deployed-images supplies API_IMAGE and MIGRATION_IMAGE, which the compose
+# file requires even for commands that only touch Postgres.
+docker compose --env-file .env.production --env-file .deployed-images \
+  -f compose.production.yml exec -T postgres \
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' > "${target}.partial"
 mv "${target}.partial" "${target}"
 

@@ -200,7 +200,7 @@ After that, a push to `main` runs the whole pipeline.
 
 ```bash
 cd /opt/tableqr
-alias tq='docker compose --env-file .env.production -f compose.production.yml'
+alias tq='docker compose --env-file .env.production --env-file .deployed-images -f compose.production.yml'
 tq ps
 tq logs -f api
 tq exec postgres psql -U tableqr tableqr
