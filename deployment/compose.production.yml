@@ -1,0 +1,73 @@
+# Production stack on the shared VPS (ArisHub runs beside it).
+#
+# Isolation from ArisHub:
+#   - its own compose project name, so containers, network and volumes are
+#     prefixed "tableqr_" and never collide;
+#   - the API is published on 127.0.0.1:3100 (ArisHub uses 3000), reachable
+#     only through the host nginx;
+#   - Postgres is not published at all; use `docker compose exec postgres psql`;
+#   - memory limits, so a runaway process here cannot starve ArisHub.
+name: tableqr
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    networks: [internal]
+
+  migrate:
+    image: ${MIGRATION_IMAGE:?MIGRATION_IMAGE is required}
+    env_file: .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 512m
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    networks: [internal]
+
+  api:
+    image: ${API_IMAGE:?API_IMAGE is required}
+    restart: unless-stopped
+    env_file: .env.production
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3100:3000"
+    mem_limit: 512m
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:

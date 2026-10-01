@@ -1,0 +1,196 @@
+name: CI/CD
+
+# Pull requests: verify + build the image (nothing is published).
+# Push to main:   verify -> publish images to GHCR -> deploy to the VPS.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never abort a deploy halfway through; PR runs can be replaced.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE_NAME: dine-qr-backend
+
+jobs:
+  verify:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: tableqr_test
+          POSTGRES_USER: tableqr
+          POSTGRES_PASSWORD: tableqr
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tableqr -d tableqr_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://tableqr:tableqr@localhost:5432/tableqr_test
+      JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npx prettier --check "src/**/*.ts" "test/**/*.ts"
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --ci
+      - name: Migrations apply cleanly and match the schema
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run: npm run test:e2e -- --ci
+      - run: npm run build
+
+  image:
+    name: Build image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_image: ${{ steps.names.outputs.api_image }}
+      migration_image: ${{ steps.names.outputs.migration_image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - id: names
+        shell: bash
+        run: |
+          base="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}"
+          echo "base=${base}" >> "$GITHUB_OUTPUT"
+          echo "api_image=${base}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "migration_image=${base}-migrate:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Images are tagged with the commit SHA: what runs in production is
+      # always traceable to one commit, and rolling back is redeploying a tag.
+      - name: API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: production
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.names.outputs.api_image }}
+            ${{ steps.names.outputs.base }}:latest
+          labels: |
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Migration image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migration
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.names.outputs.migration_image }}
+          labels: |
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,mode=max,scope=migrate
+
+  deploy:
+    name: Deploy to VPS
+    needs: image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Secrets live on the "production" environment; add required reviewers
+    # there if deploys should wait for a manual approval.
+    environment:
+      name: production
+      url: https://menu-api.arishub.site/health/ready
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+      SSH_PORT: ${{ secrets.VPS_PORT || '22' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key (not ssh-keyscan at deploy time), so a spoofed
+          # server can never receive the deployment.
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USER }}
+            Port ${SSH_PORT}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Upload deployment files
+        run: |
+          scp deployment/compose.production.yml deployment/deploy.sh deployment/backup.sh vps:/opt/tableqr/
+          ssh vps 'chmod 750 /opt/tableqr/deploy.sh /opt/tableqr/backup.sh'
+
+      - name: Deploy
+        env:
+          API_IMAGE: ${{ needs.image.outputs.api_image }}
+          MIGRATION_IMAGE: ${{ needs.image.outputs.migration_image }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The job token can read this repository's packages and expires when
+          # the job ends, so no long-lived registry credential sits on the VPS.
+          printf '%s' "$GHCR_TOKEN" | ssh vps \
+            "DOCKER_CONFIG=/opt/tableqr/.docker docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
+          ssh vps "cd /opt/tableqr && API_IMAGE='${API_IMAGE}' MIGRATION_IMAGE='${MIGRATION_IMAGE}' ./deploy.sh"
+          ssh vps "DOCKER_CONFIG=/opt/tableqr/.docker docker logout ghcr.io" || true
+
+      - name: Public health check
+        run: |
+          for i in $(seq 1 10); do
+            if curl --fail --silent --max-time 10 https://menu-api.arishub.site/health/ready; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "API is not reachable through Cloudflare" >&2
+          exit 1

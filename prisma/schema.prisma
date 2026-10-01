@@ -1,0 +1,156 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  phoneCountryCode String?
+  // ISO 3166-1 alpha-2, drives the billing currency.
+  country          String    @default("TN")
+  address          String?
+  taxId            String?
+  emailVerifiedAt  DateTime?
+  // Bumped on password reset so tokens issued before it stop working.
+  tokenVersion     Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  restaurant   Restaurant?
+  subscription Subscription?
+  tokens       UserToken[]
+}
+
+enum UserTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// Single-use tokens sent by email. Only the SHA-256 hash is stored, so a
+// database leak does not hand out working links.
+model UserToken {
+  id        String        @id @default(uuid())
+  userId    String
+  type      UserTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+}
+
+model Restaurant {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  name         String
+  slug         String   @unique
+  description  String?
+  logoUrl      String?
+  primaryColor String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories Category[]
+  scans      Scan[]
+  feedback   Feedback[]
+}
+
+model Category {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  position     Int
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  dishes     Dish[]
+
+  @@index([restaurantId, position])
+}
+
+model Dish {
+  id          String   @id @default(uuid())
+  categoryId  String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 3)
+  imageUrl    String?
+  position    Int
+  available   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, position])
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+}
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  userId               String             @unique
+  status               SubscriptionStatus
+  currency             String
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  paddleCustomerId     String?
+  paddleSubscriptionId String?            @unique
+  // Paddle's updated_at of the last applied event; older deliveries are ignored
+  // because Paddle does not guarantee webhook order.
+  paddleUpdatedAt      DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Scan {
+  id           String   @id @default(uuid())
+  restaurantId String
+  // Salted hash of the visitor address, used only to de-duplicate scans.
+  visitorHash  String
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, createdAt])
+  @@index([restaurantId, visitorHash, createdAt])
+}
+
+model Feedback {
+  id           String   @id @default(uuid())
+  restaurantId String
+  rating       Int
+  comment      String?
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, createdAt])
+}
+
+// Paddle retries webhooks; recording handled event ids makes processing idempotent.
+model ProcessedWebhookEvent {
+  id          String   @id
+  processedAt DateTime @default(now())
+}
