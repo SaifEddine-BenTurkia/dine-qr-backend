@@ -150,9 +150,10 @@ sudo cp menu-api.arishub.site.conf /etc/nginx/sites-available/menu-api.arishub.s
 sudo ln -s /etc/nginx/sites-available/menu-api.arishub.site /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
-Then set up HTTPS the same way `api.arishub.site` has it. To see how that is
-done, run `sudo nginx -T | grep -B2 -A8 "server_name api.arishub.site"`.
-If it uses certbot, run `sudo certbot --nginx -d menu-api.arishub.site`.
+HTTPS uses a Cloudflare Origin Certificate stored at
+`/etc/ssl/cloudflare/arishub.site.pem` and `.key`, with a Cloudflare
+Configuration Rule setting SSL to **Full (strict)** for `menu-api.arishub.site`
+only, so other hostnames in the zone are unaffected.
 
 **4. Deploy key.** On your own machine:
 ```bash
