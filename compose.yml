@@ -9,7 +9,8 @@ services:
       POSTGRES_USER: tableqr
       POSTGRES_PASSWORD: tableqr
     ports:
-      - "127.0.0.1:5433:5432"
+      # 5434, not 5433: the ArisHub SSH alias forwards production Postgres to 5433.
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

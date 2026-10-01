@@ -14,7 +14,7 @@ scanning a QR code. Frontend: `dine-qr-style` (Cloudflare Pages).
 
 ```bash
 cp .env.example .env
-docker compose up -d          # Postgres on localhost:5433
+docker compose up -d          # Postgres on localhost:5434
 npm ci
 npx prisma migrate dev        # apply migrations, generate the client
 npm run start:dev             # http://localhost:3001
@@ -150,10 +150,9 @@ sudo cp menu-api.arishub.site.conf /etc/nginx/sites-available/menu-api.arishub.s
 sudo ln -s /etc/nginx/sites-available/menu-api.arishub.site /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
-HTTPS uses a Cloudflare Origin Certificate stored at
-`/etc/ssl/cloudflare/arishub.site.pem` and `.key`, with a Cloudflare
-Configuration Rule setting SSL to **Full (strict)** for `menu-api.arishub.site`
-only, so other hostnames in the zone are unaffected.
+Then add HTTPS the same way `api.arishub.site` has it (Let's Encrypt, renewed
+by the existing certbot timer). The `menu-api` DNS record must exist first:
+`sudo certbot --nginx -d menu-api.arishub.site --redirect`.
 
 **4. Deploy key.** On your own machine:
 ```bash
