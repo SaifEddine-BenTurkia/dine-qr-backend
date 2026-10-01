@@ -39,7 +39,7 @@ jobs:
       DATABASE_URL: postgresql://tableqr:tableqr@localhost:5432/tableqr_test
       JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -70,7 +70,7 @@ jobs:
       api_image: ${{ steps.names.outputs.api_image }}
       migration_image: ${{ steps.names.outputs.migration_image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
 
       - id: names
@@ -142,7 +142,7 @@ jobs:
       SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
       SSH_PORT: ${{ secrets.VPS_PORT || '22' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure SSH
         shell: bash
