@@ -206,7 +206,7 @@ describe('TableQR API (e2e)', () => {
     expect(trial.body).toMatchObject({
       status: 'trialing',
       currency: 'TND',
-      pricePerMonth: 35,
+      pricePerMonth: 49,
     });
     await http().post('/subscription/start-trial').set(authed()).expect(409);
 
@@ -258,11 +258,11 @@ describe('TableQR API (e2e)', () => {
     const created = await http()
       .post('/subscription/payment-requests')
       .set(authed())
-      .send({ months: 3, contactMethod: 'WHATSAPP', note: 'Je passe demain' })
+      .send({ months: 12, contactMethod: 'WHATSAPP', note: 'Je passe demain' })
       .expect(201);
     expect(created.body).toMatchObject({
-      months: 3,
-      amount: 105,
+      months: 12,
+      amount: 490,
       currency: 'TND',
       status: 'PENDING',
     });
@@ -281,11 +281,15 @@ describe('TableQR API (e2e)', () => {
     const sub = await http().get('/subscription').set(authed()).expect(200);
     expect(sub.body.pendingRequest.reference).toBe(created.body.reference);
     expect(sub.body.plans).toEqual([
-      { months: 1, amount: 35 },
-      { months: 3, amount: 105 },
-      { months: 6, amount: 210 },
-      { months: 12, amount: 420 },
+      { months: 1, amount: 49 },
+      { months: 12, amount: 490 },
     ]);
+    // Only offered durations can be requested.
+    await http()
+      .post('/subscription/payment-requests')
+      .set(authed())
+      .send({ months: 3, contactMethod: 'EMAIL' })
+      .expect(400);
     const trialEndsAt = new Date(sub.body.trialEndsAt);
 
     // Owners cannot reach the admin queue.
@@ -323,7 +327,7 @@ describe('TableQR API (e2e)', () => {
     await http()
       .post(`/admin/payment-requests/${created.body.id}/mark-paid`)
       .set(asAdmin)
-      .send({ amountReceived: 105, adminNote: 'Espèces reçues' })
+      .send({ amountReceived: 490, adminNote: 'Espèces reçues' })
       .expect(200);
     // A second click cannot extend the subscription twice.
     await http()
@@ -342,7 +346,62 @@ describe('TableQR API (e2e)', () => {
       (periodEnd.getUTCFullYear() - trialEndsAt.getUTCFullYear()) * 12 +
       periodEnd.getUTCMonth() -
       trialEndsAt.getUTCMonth();
-    expect(monthsAfterTrial).toBe(3);
+    expect(monthsAfterTrial).toBe(12);
+    await http().get(`/public/menu/${slug}`).expect(200);
+
+    // Admin dashboard: overview, account list and direct actions.
+    const overview = await http()
+      .get('/admin/overview')
+      .set(asAdmin)
+      .expect(200);
+    expect(overview.body.revenue.total).toBeGreaterThanOrEqual(490);
+    expect(overview.body.pricing.plans).toHaveLength(2);
+    await http().get('/admin/overview').set(authed()).expect(403);
+
+    const accounts = await http()
+      .get(`/admin/accounts?search=${encodeURIComponent(email)}`)
+      .set(asAdmin)
+      .expect(200);
+    expect(accounts.body).toHaveLength(1);
+    const ownerAccount = accounts.body[0];
+    expect(ownerAccount).toMatchObject({
+      email,
+      restaurant: expect.objectContaining({ slug, dishes: 2 }),
+      subscription: expect.objectContaining({ status: 'active' }),
+      payments: expect.objectContaining({ count: 1, totalPaid: 490 }),
+    });
+
+    // A trial cannot be given on top of a paid period.
+    await http()
+      .post(`/admin/accounts/${ownerAccount.id}/extend-trial`)
+      .set(asAdmin)
+      .send({ days: 7 })
+      .expect(409);
+    // Cash at the counter, without a request from the owner.
+    await http()
+      .post(`/admin/accounts/${ownerAccount.id}/payments`)
+      .set(asAdmin)
+      .send({ months: 1, adminNote: 'Payé au comptoir' })
+      .expect(200);
+    const history = await http()
+      .get(`/admin/accounts/${ownerAccount.id}/payments`)
+      .set(asAdmin)
+      .expect(200);
+    expect(
+      history.body.filter((r: { status: string }) => r.status === 'PAID'),
+    ).toHaveLength(2);
+
+    // Suspension takes the menu offline; a gifted trial brings it back.
+    await http()
+      .post(`/admin/accounts/${ownerAccount.id}/suspend`)
+      .set(asAdmin)
+      .expect(200);
+    await http().get(`/public/menu/${slug}`).expect(402);
+    await http()
+      .post(`/admin/accounts/${ownerAccount.id}/extend-trial`)
+      .set(asAdmin)
+      .send({ days: 7 })
+      .expect(200);
     await http().get(`/public/menu/${slug}`).expect(200);
 
     // The owner can withdraw a request they no longer need.

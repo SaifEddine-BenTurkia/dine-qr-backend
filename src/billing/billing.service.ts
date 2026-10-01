@@ -17,7 +17,7 @@ import { randomInt } from 'node:crypto';
 import { AdminAccess } from '../common/admin';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CURRENCY, plansFrom, type PaymentContact, type Plan } from './plans';
+import { CURRENCY, parsePlans, type PaymentContact, type Plan } from './plans';
 import {
   addMonths,
   effectiveStatus,
@@ -50,10 +50,10 @@ export class BillingService {
     config: ConfigService,
   ) {
     const price = Number(config.get<string>('PRICE_TND'));
-    this.pricePerMonth = Number.isFinite(price) && price > 0 ? price : 35;
-    this.plans = plansFrom(
+    this.pricePerMonth = Number.isFinite(price) && price > 0 ? price : 49;
+    this.plans = parsePlans(
+      config.get<string>('PAYMENT_PLANS'),
       this.pricePerMonth,
-      config.get<string>('PAYMENT_PLAN_MONTHS'),
     );
     this.trialDays = Number(config.get<string>('TRIAL_DAYS') ?? 30) || 30;
     this.contact = {
@@ -245,6 +245,47 @@ export class BillingService {
         ),
       );
     return { status: 'PAID', periodEnd };
+  }
+
+  /**
+   * Cash handed over without a request from the owner (at the counter, during
+   * a visit): recorded as a request and confirmed at once, so it shows in the
+   * same history and extends the subscription the same way.
+   */
+  async recordCashPayment(
+    userId: string,
+    adminEmail: string,
+    input: { months: number; amountReceived?: number; adminNote?: string },
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('Compte introuvable');
+    const plan = this.plans.find((p) => p.months === input.months);
+    const amount =
+      plan?.amount ??
+      Math.round(this.pricePerMonth * input.months * 1000) / 1000;
+
+    const request = await this.prisma.paymentRequest.create({
+      data: {
+        reference: generateReference(),
+        userId,
+        months: input.months,
+        amount,
+        currency: CURRENCY,
+        contactMethod: 'PHONE',
+        note: 'Paiement enregistré par un administrateur',
+      },
+    });
+    return this.markPaid(request.id, adminEmail, {
+      amountReceived: input.amountReceived ?? amount,
+      adminNote: input.adminNote,
+    });
+  }
+
+  get pricing() {
+    return { pricePerMonth: this.pricePerMonth, plans: this.plans };
   }
 
   async reject(id: string, adminEmail: string, adminNote?: string) {

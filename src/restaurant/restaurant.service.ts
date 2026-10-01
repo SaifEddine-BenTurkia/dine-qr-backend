@@ -136,5 +136,6 @@ export function toRestaurantView(restaurant: Restaurant) {
     description: restaurant.description,
     logoUrl: restaurant.logoUrl,
     primaryColor: restaurant.primaryColor,
+    template: restaurant.template,
   };
 }

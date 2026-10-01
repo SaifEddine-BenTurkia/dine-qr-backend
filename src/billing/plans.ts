@@ -12,19 +12,30 @@ export interface PaymentContact {
   phone: string | null;
 }
 
-/** Durations an owner can pay for, from PAYMENT_PLAN_MONTHS (e.g. "1,3,6,12"). */
-export function plansFrom(
+export const DEFAULT_PLANS = '1:49,12:490';
+
+/**
+ * Plans an owner can pay for, from PAYMENT_PLANS: "months:price" pairs, e.g.
+ * "1:49,12:490" (monthly, and a discounted year). An entry without a price
+ * ("3") costs months × the monthly price.
+ */
+export function parsePlans(
+  spec: string | undefined,
   pricePerMonth: number,
-  monthsList: string | undefined,
 ): Plan[] {
-  const months = (monthsList ?? '1,3,6,12')
-    .split(',')
-    .map((value) => Number(value.trim()))
-    .filter((value) => Number.isInteger(value) && value > 0 && value <= 24);
-  return [...new Set(months)]
-    .sort((a, b) => a - b)
-    .map((m) => ({
-      months: m,
-      amount: Math.round(pricePerMonth * m * 1000) / 1000,
-    }));
+  const plans = new Map<number, number>();
+  for (const entry of (spec?.trim() || DEFAULT_PLANS).split(',')) {
+    const [monthsText, amountText] = entry
+      .split(':')
+      .map((part) => part.trim());
+    const months = Number(monthsText);
+    if (!Number.isInteger(months) || months < 1 || months > 24) continue;
+    const amount =
+      amountText === undefined ? pricePerMonth * months : Number(amountText);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    plans.set(months, Math.round(amount * 1000) / 1000);
+  }
+  return [...plans.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([months, amount]) => ({ months, amount }));
 }

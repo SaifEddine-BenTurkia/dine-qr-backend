@@ -60,6 +60,8 @@ model Restaurant {
   description  String?
   logoUrl      String?
   primaryColor String?
+  // Visual style of the public menu; see MENU_TEMPLATES in restaurant.dto.ts.
+  template     String   @default("classic")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

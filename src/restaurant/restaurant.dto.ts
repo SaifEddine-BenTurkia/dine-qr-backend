@@ -1,6 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { Transform } from 'class-transformer';
 import {
+  IsIn,
   IsOptional,
   IsString,
   IsUrl,
@@ -19,6 +20,15 @@ const emptyToNull = ({ value }: { value: unknown }) => {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 };
+
+export const MENU_TEMPLATES = [
+  'classic',
+  'elegant',
+  'minimal',
+  'street',
+  'night',
+] as const;
+export type MenuTemplate = (typeof MENU_TEMPLATES)[number];
 
 export class CreateRestaurantDto {
   @Transform(trim)
@@ -54,6 +64,10 @@ export class CreateRestaurantDto {
   @ValidateIf((_, value) => value !== null)
   @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'Couleur invalide (#RRGGBB)' })
   primaryColor?: string | null;
+
+  @IsOptional()
+  @IsIn(MENU_TEMPLATES, { message: 'Modèle de menu inconnu' })
+  template?: string;
 }
 
 export class UpdateRestaurantDto extends PartialType(CreateRestaurantDto) {}
