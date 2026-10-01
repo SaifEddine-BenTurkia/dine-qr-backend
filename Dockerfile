@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- base: runtime OS packages shared by every stage -------------------------
-FROM node:22-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
