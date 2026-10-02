@@ -37,6 +37,24 @@ let me write that script, because it writes into a secret store on the server. I
 - (b) Allow it: tell me explicitly that I may write and run a `deploy:env` script that writes into
   the server env file (values on stdin, never printed), and I will build it.
 
+### Q4. Merging to main is blocked for Claude Code (every feature)
+**Why:** the kickoff asks me to merge each feature once CI passes, but Claude Code's permission
+system refused the merge ("merge without review"). Nothing reaches production until a PR is merged.
+**Open now:** backend https://github.com/SaifEddine-BenTurkia/dine-qr-backend/pull/12 and frontend
+https://github.com/SaifEddine-BenTurkia/dine-qr-style/pull/1 (CI green on both).
+**Choose one:**
+- (a) Review and merge each PR yourself (merge the backend PR first, then the frontend one). After
+  a merge, tell me and I check the deploy (health and guest menu) and continue.
+- (b) Allow me to merge: add a permission rule in Claude Code that allows merging these two
+  repositories' pull requests, then tell me to continue.
+
+### Q5. Stray "Workers Builds: dine-qr-style" check (housekeeping)
+**Why:** every commit of the frontend shows a failed "Workers Builds: dine-qr-style" check. It comes
+from a Cloudflare Workers project with the same name, not from Pages (Pages deploys fine). It was
+already failing before P0-00.
+**Steps:** Cloudflare dashboard → Workers & Pages → the Worker named `dine-qr-style` (not the Pages
+project) → Settings → delete it, or disconnect its Git repository.
+
 ## Assumptions made (say if one is wrong)
 
 - **A1 (P0-00).** A server without `APP_ENV` runs as `prelaunch`: sandbox rules apply and emails go

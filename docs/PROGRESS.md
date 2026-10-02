@@ -6,7 +6,12 @@ Plan: [PLAN.md](PLAN.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Status
 
-_Updated every 5 features._ (first status after 5 features)
+_Updated every 5 features._
+
+**2026-10-02, stopped after P0-00.** P0-00 is built and green in CI (backend PR #12, frontend PR #1),
+but merging to main was refused by Claude Code's permission system, so nothing is deployed yet.
+Waiting on the owner: merge the two PRs or allow merging (QUESTIONS Q4), rotate the leaked keys (Q1),
+the `mehdi-origin` decision (Q2), and the `deploy:env` decision (Q3). Next: P0-01 architecture doc.
 
 ## Phase 0: security, sandbox and foundations
 
@@ -14,7 +19,7 @@ Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-
 
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
-| P0-00 | Security fixes and sandbox guards | in progress | |
+| P0-00 | Security fixes and sandbox guards | blocked-on-owner | Built, CI green (PRs #12 and #1). Waits for merge (Q4), key rotation (Q1), remote decision (Q2); deploy:env not built (Q3); CSP still report-only until deployed |
 | P0-01 | Architecture doc | todo | |
 | P0-02 | Tests, CI and seed data | todo | |
 | P0-12 | Server hardening and reliability | todo | |
