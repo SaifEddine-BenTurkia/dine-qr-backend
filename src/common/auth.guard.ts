@@ -26,6 +26,14 @@ type AuthedRequest = Request & { user?: AuthUser };
 
 const ALLOW_UNVERIFIED = 'allowUnverifiedEmail';
 
+const QUERY_TOKEN = 'allowQueryToken';
+
+/**
+ * Accepts the session token as `?access_token=` on this route. Only for
+ * Server-Sent Events: the browser's EventSource cannot send headers.
+ */
+export const AllowQueryToken = () => SetMetadata(QUERY_TOKEN, true);
+
 /** Lets a signed-in user whose email is not yet verified reach this route. */
 export const AllowUnverifiedEmail = () => SetMetadata(ALLOW_UNVERIFIED, true);
 
@@ -39,7 +47,18 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
-    const [scheme, token] = (req.headers.authorization ?? '').split(' ');
+    let [scheme, token] = (req.headers.authorization ?? '').split(' ');
+    const queryToken = req.query?.access_token;
+    if (
+      !token &&
+      typeof queryToken === 'string' &&
+      this.reflector.getAllAndOverride<boolean>(QUERY_TOKEN, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    ) {
+      [scheme, token] = ['Bearer', queryToken];
+    }
     if (scheme !== 'Bearer' || !token) {
       throw new UnauthorizedException('Authentification requise');
     }

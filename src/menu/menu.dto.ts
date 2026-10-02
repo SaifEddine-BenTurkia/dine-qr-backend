@@ -1,5 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsIn,
+  IsObject,
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
@@ -17,6 +19,13 @@ import {
   ValidateIf,
 } from 'class-validator';
 
+import { sanitizeTranslations, SUPPORTED_LOCALES } from '../common/locales';
+
+const i18n =
+  (max: number) =>
+  ({ value }: { value: unknown }) =>
+    sanitizeTranslations(value, max);
+
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
@@ -31,6 +40,12 @@ export class CreateCategoryDto {
   @IsString()
   @Length(1, 80, { message: 'Nom de catégorie requis' })
   name: string;
+
+  @Transform(i18n(80))
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsObject()
+  nameI18n?: Record<string, string> | null;
 }
 
 export class UpdateCategoryDto {
@@ -39,6 +54,12 @@ export class UpdateCategoryDto {
   @IsString()
   @Length(1, 80)
   name?: string;
+
+  @Transform(i18n(80))
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsObject()
+  nameI18n?: Record<string, string> | null;
 
   @IsOptional()
   @IsInt()
@@ -91,6 +112,18 @@ export class CreateDishDto {
   @IsOptional()
   @IsBoolean()
   available?: boolean;
+
+  @Transform(i18n(120))
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsObject()
+  nameI18n?: Record<string, string> | null;
+
+  @Transform(i18n(1000))
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsObject()
+  descriptionI18n?: Record<string, string> | null;
 }
 
 export class UpdateDishDto {
@@ -127,6 +160,34 @@ export class UpdateDishDto {
   @IsOptional()
   @IsBoolean()
   available?: boolean;
+
+  @Transform(i18n(120))
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsObject()
+  nameI18n?: Record<string, string> | null;
+
+  @Transform(i18n(1000))
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsObject()
+  descriptionI18n?: Record<string, string> | null;
+
+  /** Locales still flagged as unchecked AI translations; the owner clears them. */
+  @IsOptional()
+  @IsArray()
+  @IsIn(SUPPORTED_LOCALES, { each: true })
+  aiLocales?: string[];
+
+  /** P1-04: true marks the dish "Épuisé"; false makes it available again. */
+  @IsOptional()
+  @IsBoolean()
+  soldOut?: boolean;
+
+  /** With soldOut=true: until 05:00 tomorrow (default) or until reset by hand. */
+  @IsOptional()
+  @IsIn(['until_tomorrow', 'manual'])
+  soldOutMode?: 'until_tomorrow' | 'manual';
 
   @IsOptional()
   @IsInt()

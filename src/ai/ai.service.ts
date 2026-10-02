@@ -52,9 +52,15 @@ export class AiService {
       throw new ServiceUnavailableException("L'import IA n'est pas configuré");
     }
 
-    const reply = await this.complete(
-      `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
-    );
+    const reply = await this.complete([
+      {
+        type: 'image_url',
+        image_url: {
+          url: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+        },
+      },
+      { type: 'text', text: PROMPT },
+    ]);
 
     let dishes: ParsedDish[];
     try {
@@ -73,13 +79,21 @@ export class AiService {
   // Each model is tried with every key before moving to the next model:
   // free-tier keys are rate limited individually, and free models are often
   // saturated upstream.
-  private async complete(imageDataUrl: string): Promise<string> {
+  get configured() {
+    return this.keys.length > 0;
+  }
+
+  /** One chat completion with the model fallback list. */
+  async complete(content: unknown[]): Promise<string> {
+    if (this.keys.length === 0) {
+      throw new ServiceUnavailableException("L'IA n'est pas configurée");
+    }
     for (const model of this.models) {
       for (let attempt = 0; attempt < this.keys.length; attempt++) {
         const key = this.keys[this.nextKey];
         this.nextKey = (this.nextKey + 1) % this.keys.length;
         try {
-          return await this.request(model, key, imageDataUrl);
+          return await this.request(model, key, content);
         } catch (error) {
           this.logger.warn(
             `OpenRouter ${model} (key ${attempt + 1}) failed: ${
@@ -96,7 +110,7 @@ export class AiService {
     );
   }
 
-  private async request(model: string, key: string, imageDataUrl: string) {
+  private async request(model: string, key: string, content: unknown[]) {
     const response = await fetch(
       'https://openrouter.ai/api/v1/chat/completions',
       {
@@ -112,15 +126,7 @@ export class AiService {
           // small balance. A 100-dish menu needs ~4k tokens; reasoning models
           // spend more before answering.
           max_tokens: 8000,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'image_url', image_url: { url: imageDataUrl } },
-                { type: 'text', text: PROMPT },
-              ],
-            },
-          ],
+          messages: [{ role: 'user', content }],
         }),
         signal: AbortSignal.timeout(90_000),
       },

@@ -16,7 +16,9 @@ import { MenuModule } from './menu/menu.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PublicMenuModule } from './public-menu/public-menu.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
+import { ServiceModule } from './service/service.module';
 import { SharedModule } from './shared.module';
+import { TablesModule } from './tables/tables.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { SharedModule } from './shared.module';
     BillingModule,
     InsightsModule,
     AiModule,
+    TablesModule,
+    ServiceModule,
     AdminModule,
   ],
   providers: [

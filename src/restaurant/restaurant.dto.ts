@@ -1,6 +1,10 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { Transform } from 'class-transformer';
+import { SUPPORTED_LOCALES } from '../common/locales';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsIn,
   IsOptional,
   IsString,
@@ -68,6 +72,37 @@ export class CreateRestaurantDto {
   @IsOptional()
   @IsIn(MENU_TEMPLATES, { message: 'Modèle de menu inconnu' })
   template?: string;
+
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(64)
+  wifiSsid?: string | null;
+
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(64)
+  wifiPassword?: string | null;
+
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(/^[A-Za-z0-9_-]{10,200}$/, { message: 'Place ID Google invalide' })
+  googlePlaceId?: string | null;
+
+  @IsOptional()
+  @IsIn(SUPPORTED_LOCALES)
+  defaultLocale?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(SUPPORTED_LOCALES.length)
+  @IsIn(SUPPORTED_LOCALES, { each: true })
+  enabledLocales?: string[];
 }
 
 export class UpdateRestaurantDto extends PartialType(CreateRestaurantDto) {}

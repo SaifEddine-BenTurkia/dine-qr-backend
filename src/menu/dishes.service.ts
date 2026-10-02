@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { nextTunisFiveAm } from '../common/locales';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
@@ -42,6 +44,8 @@ export class DishesService {
         price: input.price,
         imageUrl: input.imageUrl,
         available: input.available ?? true,
+        nameI18n: input.nameI18n ?? Prisma.DbNull,
+        descriptionI18n: input.descriptionI18n ?? Prisma.DbNull,
         position: (last._max.position ?? -1) + 1,
       },
     });
@@ -50,11 +54,36 @@ export class DishesService {
 
   async update(userId: string, id: string, input: UpdateDishDto) {
     const restaurantId = await this.access.restaurantIdFor(userId);
-    await this.findOwned(restaurantId, id);
+    const current = await this.findOwned(restaurantId, id);
     if (input.categoryId) {
       await this.assertCategoryOwned(restaurantId, input.categoryId);
     }
-    const dish = await this.prisma.dish.update({ where: { id }, data: input });
+    const { soldOut, soldOutMode, nameI18n, descriptionI18n, ...rest } = input;
+    const data: Prisma.DishUpdateInput = {
+      ...rest,
+      ...(nameI18n !== undefined && { nameI18n: nameI18n ?? Prisma.DbNull }),
+      ...(descriptionI18n !== undefined && {
+        descriptionI18n: descriptionI18n ?? Prisma.DbNull,
+      }),
+    };
+    // Editing the French text makes existing translations "à revoir".
+    const sourceChanged =
+      (rest.name !== undefined && rest.name !== current.name) ||
+      (rest.description !== undefined &&
+        rest.description !== current.description);
+    if (sourceChanged && rest.aiLocales === undefined) {
+      const translated = new Set([
+        ...Object.keys((current.nameI18n as object | null) ?? {}),
+        ...Object.keys((current.descriptionI18n as object | null) ?? {}),
+      ]);
+      data.aiLocales = [...translated];
+    }
+    if (soldOut !== undefined) {
+      data.soldOut = soldOut;
+      data.soldOutUntil =
+        soldOut && soldOutMode !== 'manual' ? nextTunisFiveAm() : null;
+    }
+    const dish = await this.prisma.dish.update({ where: { id }, data });
     return toDishView(dish);
   }
 
