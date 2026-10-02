@@ -8,10 +8,22 @@ Plan: [PLAN.md](PLAN.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 _Updated every 5 features._
 
+**2026-10-03, pitch build.** The owner asked for a pitch-ready product by 2026-10-04, so plan order
+was changed on purpose: after P0-00, the guest and staff features of Phase 1 that show value in a
+demo were built first, on branch `feat/P1-guest-service` (stacked on P0-00) in both repos.
+
+- **Done (8):** P1-01 tables and QR, P1-04 sold out, P1-05 service buttons, P1-06 staff live
+  board (no web push), P1-03 translations + guest language and RTL, P1-12 selection, P1-08
+  feedback with Google button, P1-09 value dashboard (with a minimal P0-06 events table).
+- **Blocked on the owner:** every merge (Q4: Claude Code may not merge), key rotation (Q1),
+  `mehdi-origin` (Q2), `deploy:env` (Q3).
+- **Assumptions:** A1 (prelaunch email allowlist), A2 (plan order changed for the pitch), A3
+  (entitlements not enforced until P0-03), A4 (owner dashboard stays French until P0-05).
+- **Next:** P0-01 architecture doc, P0-02 tests/seed, then back to plan order (P0-12, P0-13,
+  P0-04, P0-11, P0-03, P0-05 remainder, P0-06 aggregates, …), then P1-02, P1-07, P1-10, P1-11.
+
 **2026-10-02, stopped after P0-00.** P0-00 is built and green in CI (backend PR #12, frontend PR #1),
 but merging to main was refused by Claude Code's permission system, so nothing is deployed yet.
-Waiting on the owner: merge the two PRs or allow merging (QUESTIONS Q4), rotate the leaked keys (Q1),
-the `mehdi-origin` decision (Q2), and the `deploy:env` decision (Q3). Next: P0-01 architecture doc.
 
 ## Phase 0: security, sandbox and foundations
 
@@ -27,8 +39,8 @@ Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-
 | P0-04 | Money in millimes | todo | |
 | P0-11 | Account model and roles | todo | |
 | P0-03 | Plans, entitlements, feature flags | todo | |
-| P0-05 | i18n and RTL | todo | |
-| P0-06 | Event tracking | todo | |
+| P0-05 | i18n and RTL | in progress | Guest menu done (fr/ar/en, RTL) with P1-03; dashboard, emails, lint rule still to do |
+| P0-06 | Event tracking | in progress | Event table, guest tracker and server events built with P1-09; daily aggregates and Scan migration still to do |
 | P0-07 | Jobs and scheduler | todo | |
 | P0-08 | Notifications service | todo | |
 | P0-09 | Audit log | todo | |
@@ -40,16 +52,16 @@ Order: P1-01, P1-04, P1-05, P1-06, P1-02, P1-03, P1-12, P1-08, P1-07, P1-09, P1-
 
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
-| P1-01 | Tables and per-table QR codes | todo | |
-| P1-04 | Sold-out toggle | todo | |
-| P1-05 | Service buttons (guest side) | todo | |
-| P1-06 | Staff live board | todo | |
+| P1-01 | Tables and per-table QR codes | done | Branch feat/P1-guest-service, not merged (Q4); entitlement waits for P0-03 |
+| P1-04 | Sold-out toggle | done | 4.9 s to the guest menu; "hide instead" setting not built |
+| P1-05 | Service buttons (guest side) | done | Waiter, bill cash/card, WiFi with QR; cooldown and rate limits |
+| P1-06 | Staff live board | done | SSE + polling, sound, alerts; web push and Arabic board not built |
 | P1-02 | AI menu import (photo or PDF) | todo | |
-| P1-03 | AI translation and language auto-detect | todo | |
-| P1-12 | "Ma sélection" (guest list) | todo | |
-| P1-08 | Guest feedback, Google review option, alerts | todo | |
+| P1-03 | AI translation and language auto-detect | done | Needs a working OpenRouter key on the server (Q1) |
+| P1-12 | "Ma sélection" (guest list) | done | |
+| P1-08 | Guest feedback, Google review option, alerts | done | Saving as Review waits for Phase 2 |
 | P1-07 | Scheduled menus | todo | |
-| P1-09 | Owner analytics and ROI dashboard | todo | |
+| P1-09 | Owner analytics and ROI dashboard | done | Raw-event queries; aggregates with P0-06 |
 | P1-10 | Print studio | todo | |
 | P1-11 | Weekly report | todo | |
 

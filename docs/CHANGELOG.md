@@ -2,6 +2,21 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## Pitch build: P1-01, P1-03, P1-04, P1-05, P1-06, P1-08, P1-09, P1-12 (2026-10-03)
+
+- Tables with their own QR codes (bulk add, zones, PNG/SVG, print all, rotate a QR).
+- Guest bar: call the waiter, ask for the bill (cash or card), WiFi with a join QR, "Ma sélection"
+  with "Montrer au serveur", and feedback.
+- Staff live board with sound, waiting-time colours and low-rating alerts.
+- Sold out until tomorrow 05:00 or until reset, live on the guest menu.
+- Menu in French, Arabic (right-to-left) and English; AI translation with a Tunisian dish glossary;
+  "IA · à vérifier" flags.
+- Feedback with tags, consented contact and a Google review button shown to everyone.
+- "Ce mois-ci avec TableQR" value dashboard, heatmap, languages, top and low-conversion dishes.
+- Restaurant settings: WiFi, Google Place ID, menu languages.
+
+**Test manually:** see docs/PITCH_DEMO.md (the demo script doubles as the manual test).
+
 ## P0-00 Security fixes and sandbox guards (2026-10-02)
 
 - Frontend `.env` holds only `VITE_API_URL` (local API by default); the leaked keys are gone from it.
