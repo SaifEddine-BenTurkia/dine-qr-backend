@@ -1,9 +1,11 @@
+import { modeProblems } from './app-env';
+
 type Environment = Record<string, string | undefined>;
 
 // Everything the API needs to serve real users. Missing values are tolerated in
 // development so the app can boot without every third-party account, but a
 // production container refuses to start rather than fail on the first request.
-const productionRequired = [
+export const productionRequired = [
   'DATABASE_URL',
   'JWT_SECRET',
   'FRONTEND_URL',
@@ -31,6 +33,13 @@ export function validateEnvironment(environment: Environment): Environment {
     throw new Error(
       `Missing required environment variables: ${missingRuntime.join(', ')}`,
     );
+  }
+
+  // Sandbox guard (PLAN section 20): a sandbox deployment never carries live
+  // provider settings, and production never carries sandbox ones.
+  const modes = modeProblems(environment);
+  if (modes.length > 0) {
+    throw new Error(`Environment mode check failed: ${modes.join('; ')}`);
   }
 
   if (environment.NODE_ENV !== 'production') {

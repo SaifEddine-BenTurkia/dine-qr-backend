@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { maskRecipient, RecipientPolicy } from './recipient-policy';
 
 export interface PaymentRequestEmail {
   reference: string;
@@ -16,7 +17,10 @@ export class MailService {
   private readonly from: string;
   private readonly frontendUrl: string;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly recipients: RecipientPolicy,
+  ) {
     const apiKey = config.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
     this.from =
@@ -175,21 +179,35 @@ export class MailService {
     html: string,
     link: string,
   ) {
+    const all = Array.isArray(to) ? to : [to];
     if (!this.resend) {
-      // Development without a Resend key: the link is all you need to continue.
+      // Development without a Resend key: nothing is sent, and the link is
+      // all you need to continue.
       this.logger.warn(
-        `RESEND_API_KEY not set; email "${subject}" to ${String(to)}: ${link}`,
+        `RESEND_API_KEY not set; email "${subject}" to ${all.map(maskRecipient).join(', ')}: ${link}`,
       );
       return;
     }
+
+    const allowed = all.filter((address) => this.recipients.allows(address));
+    const dropped = all.filter((address) => !allowed.includes(address));
+    if (dropped.length > 0) {
+      this.logger.warn(
+        `Email "${subject}" not sent to ${dropped.map(maskRecipient).join(', ')}: not in the ${this.recipients.appEnv} allowlist`,
+      );
+    }
+    if (allowed.length === 0) return;
+
     const { error } = await this.resend.emails.send({
       from: this.from,
-      to,
+      to: allowed,
       subject,
       html,
     });
     if (error) {
-      this.logger.error(`Resend failed for ${String(to)}: ${error.message}`);
+      this.logger.error(
+        `Resend failed for ${allowed.map(maskRecipient).join(', ')}: ${error.message}`,
+      );
       throw new Error('Email delivery failed');
     }
   }

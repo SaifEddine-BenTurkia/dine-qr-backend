@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./dine-qr-backend/.env)",
+      "Read(./dine-qr-backend/.env.sandbox)",
+      "Read(./dine-qr-backend/.env.local)",
+      "Read(./dine-qr-style/.env.local)",
+      "Edit(./dine-qr-backend/.env.sandbox)",
+      "Bash(cat ./dine-qr-backend/.env.sandbox)",
+      "Bash(printenv)",
+      "Bash(env)"
+    ],
+    "ask": ["Bash(ssh arishub-db:*)"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|MultiEdit|Grep|Glob|Bash|PowerShell|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/dine-qr-backend/scripts/claude-guard.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

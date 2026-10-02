@@ -45,6 +45,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: No secrets in tracked files
+        run: npm run secrets:scan
+      - name: Environment guard
+        run: npm run env:check
       - run: npx prisma validate
       - run: npx prisma generate
       - run: npx prettier --check "src/**/*.ts" "test/**/*.ts"

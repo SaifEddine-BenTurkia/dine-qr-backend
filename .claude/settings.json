@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.sandbox)",
+      "Read(./.env.local)",
+      "Edit(./.env.sandbox)",
+      "Bash(cat ./.env.sandbox)",
+      "Bash(printenv)",
+      "Bash(env)"
+    ],
+    "ask": [
+      "Bash(ssh arishub-db:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|MultiEdit|Grep|Glob|Bash|PowerShell|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/claude-guard.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

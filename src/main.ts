@@ -4,11 +4,13 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { configureApp } from './app.setup';
+import { RedactingLogger } from './common/redacting-logger';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
+  app.useLogger(new RedactingLogger());
   // Exactly one proxy (host nginx) sits between the container and Cloudflare.
   app.set('trust proxy', 1);
   configureApp(app);
@@ -20,6 +22,10 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error: unknown) => {
-  Logger.error(error, 'TableQR API failed to start', 'Bootstrap');
+  new RedactingLogger().error(
+    error,
+    'TableQR API failed to start',
+    'Bootstrap',
+  );
   process.exit(1);
 });

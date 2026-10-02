@@ -17,7 +17,12 @@
     "test": "jest",
     "test:e2e": "jest --runInBand --config ./test/jest-e2e.json",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "env:check": "ts-node --transpile-only scripts/env-check.ts",
+    "env:init": "ts-node --transpile-only scripts/env-init.ts",
+    "smoke": "ts-node --transpile-only scripts/smoke.ts",
+    "smoke:public": "ts-node --transpile-only scripts/smoke-public.ts",
+    "secrets:scan": "node scripts/secrets-scan.mjs"
   },
   "jest": {
     "moduleFileExtensions": [

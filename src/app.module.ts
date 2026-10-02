@@ -22,6 +22,9 @@ import { SharedModule } from './shared.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Development keys live in .env.sandbox (PLAN section 20); .env is the
+      // fallback for older setups. The first file wins for each variable.
+      envFilePath: ['.env.sandbox', '.env'],
       validate: validateEnvironment,
     }),
     // Backstop for every route. Endpoints that guard credentials, inboxes or

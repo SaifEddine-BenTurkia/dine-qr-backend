@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AdminAccess, AdminGuard } from './common/admin';
 import { JwtAuthGuard } from './common/auth.guard';
 import { MailService } from './mail/mail.service';
+import { RecipientPolicy } from './mail/recipient-policy';
 import { MediaService } from './media/media.service';
 import { RestaurantAccessService } from './restaurant/restaurant-access.service';
 
@@ -26,6 +27,7 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
     AdminAccess,
     AdminGuard,
     MailService,
+    RecipientPolicy,
     MediaService,
     RestaurantAccessService,
   ],
@@ -35,6 +37,7 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
     AdminAccess,
     AdminGuard,
     MailService,
+    RecipientPolicy,
     MediaService,
     RestaurantAccessService,
   ],
