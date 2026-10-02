@@ -137,5 +137,17 @@ export function toRestaurantView(restaurant: Restaurant) {
     logoUrl: restaurant.logoUrl,
     primaryColor: restaurant.primaryColor,
     template: restaurant.template,
+    wifiSsid: restaurant.wifiSsid,
+    wifiPassword: restaurant.wifiPassword,
+    googlePlaceId: restaurant.googlePlaceId,
+    defaultLocale: restaurant.defaultLocale,
+    // French is always offered; the default language comes first.
+    enabledLocales: [
+      ...new Set([
+        restaurant.defaultLocale,
+        ...restaurant.enabledLocales,
+        'fr',
+      ]),
+    ],
   };
 }

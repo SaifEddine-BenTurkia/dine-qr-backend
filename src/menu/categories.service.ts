@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
 import type { CreateCategoryDto, UpdateCategoryDto } from './menu.dto';
@@ -35,6 +36,7 @@ export class CategoriesService {
       data: {
         restaurantId,
         name: input.name,
+        nameI18n: input.nameI18n ?? Prisma.DbNull,
         position: (last._max.position ?? -1) + 1,
       },
     });
@@ -43,9 +45,13 @@ export class CategoriesService {
 
   async update(userId: string, id: string, input: UpdateCategoryDto) {
     await this.findOwned(userId, id);
+    const { nameI18n, ...rest } = input;
     const category = await this.prisma.category.update({
       where: { id },
-      data: input,
+      data: {
+        ...rest,
+        ...(nameI18n !== undefined && { nameI18n: nameI18n ?? Prisma.DbNull }),
+      },
     });
     return toCategoryView(category);
   }

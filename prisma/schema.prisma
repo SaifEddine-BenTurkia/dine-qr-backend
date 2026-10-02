@@ -53,28 +53,112 @@ model UserToken {
 }
 
 model Restaurant {
-  id           String   @id @default(uuid())
-  userId       String   @unique
-  name         String
-  slug         String   @unique
-  description  String?
-  logoUrl      String?
-  primaryColor String?
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  name           String
+  slug           String   @unique
+  description    String?
+  logoUrl        String?
+  primaryColor   String?
   // Visual style of the public menu; see MENU_TEMPLATES in restaurant.dto.ts.
-  template     String   @default("classic")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  template       String   @default("classic")
+  // Guest WiFi, shown by the WiFi button on the guest menu (P1-05).
+  wifiSsid       String?
+  wifiPassword   String?
+  // Google review link: https://search.google.com/local/writereview?placeid=<id> (P1-08).
+  googlePlaceId  String?
+  // Menu languages (P1-03): the default first; French is always available.
+  defaultLocale  String   @default("fr")
+  enabledLocales String[] @default(["fr"])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categories Category[]
-  scans      Scan[]
-  feedback   Feedback[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories      Category[]
+  scans           Scan[]
+  feedback        Feedback[]
+  tables          DiningTable[]
+  serviceRequests ServiceRequest[]
+  events          Event[]
+}
+
+// A physical table with its own QR code (P1-01). The token is random and
+// rotatable, never sequential: https://<menu>/m/<slug>?t=<token>.
+model DiningTable {
+  id           String   @id @default(uuid())
+  restaurantId String
+  label        String
+  zone         String?
+  token        String   @unique
+  position     Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  restaurant      Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  serviceRequests ServiceRequest[]
+
+  @@unique([restaurantId, label])
+  @@index([restaurantId, position])
+}
+
+enum ServiceRequestType {
+  WAITER
+  BILL_CASH
+  BILL_CARD
+}
+
+enum ServiceRequestStatus {
+  OPEN
+  ACKNOWLEDGED
+  DONE
+  CANCELLED
+}
+
+// "Appeler le serveur" and "L'addition" from the guest menu (P1-05, P1-06).
+model ServiceRequest {
+  id             String               @id @default(uuid())
+  restaurantId   String
+  tableId        String
+  sessionId      String
+  type           ServiceRequestType
+  status         ServiceRequestStatus @default(OPEN)
+  createdAt      DateTime             @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table      DiningTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, status, createdAt])
+  @@index([tableId, type, createdAt])
+}
+
+// Append-only guest and staff actions (P0-06), the source of every dashboard
+// number. No personal data: sessions are random IDs made by the browser.
+model Event {
+  id           String   @id @default(uuid())
+  restaurantId String
+  type         String
+  tableId      String?
+  sessionId    String?
+  itemId       String?
+  props        Json?
+  occurredAt   DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, type, occurredAt])
+  @@index([restaurantId, occurredAt])
 }
 
 model Category {
   id           String   @id @default(uuid())
   restaurantId String
   name         String
+  // Translations keyed by locale, e.g. {"en": "Starters", "ar": "مقبلات"} (P1-03).
+  nameI18n     Json?
+  // Locales whose translation came from AI and is not yet checked by the owner.
+  aiLocales    String[] @default([])
   position     Int
   createdAt    DateTime @default(now())
 
@@ -85,16 +169,23 @@ model Category {
 }
 
 model Dish {
-  id          String   @id @default(uuid())
-  categoryId  String
-  name        String
-  description String?
-  price       Decimal  @db.Decimal(10, 3)
-  imageUrl    String?
-  position    Int
-  available   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String    @id @default(uuid())
+  categoryId      String
+  name            String
+  description     String?
+  price           Decimal   @db.Decimal(10, 3)
+  imageUrl        String?
+  position        Int
+  available       Boolean   @default(true)
+  // Sold out (P1-04): shown greyed "Épuisé"; soldOutUntil resets it (05:00 Tunis).
+  soldOut         Boolean   @default(false)
+  soldOutUntil    DateTime?
+  nameI18n        Json?
+  descriptionI18n Json?
+  // Locales whose translation came from AI and is not yet checked by the owner.
+  aiLocales       String[]  @default([])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
@@ -179,11 +270,17 @@ model Scan {
 }
 
 model Feedback {
-  id           String   @id @default(uuid())
-  restaurantId String
-  rating       Int
-  comment      String?
-  createdAt    DateTime @default(now())
+  id             String   @id @default(uuid())
+  restaurantId   String
+  rating         Int
+  comment        String?
+  // P1-08: tags (service, plats, attente, prix, proprete, ambiance), table,
+  // and contact details only with explicit consent.
+  tags           String[] @default([])
+  tableLabel     String?
+  contactConsent Boolean  @default(false)
+  contact        String?
+  createdAt      DateTime @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 

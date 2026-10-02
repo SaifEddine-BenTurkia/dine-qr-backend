@@ -55,9 +55,26 @@ already failing before P0-00.
 **Steps:** Cloudflare dashboard → Workers & Pages → the Worker named `dine-qr-style` (not the Pages
 project) → Settings → delete it, or disconnect its Git repository.
 
+### Q6. Merge order for the pitch build (2026-10-03)
+**Why:** the pitch features are on `feat/P1-guest-service`, stacked on P0-00. Nothing is live until
+merged, and Claude Code cannot merge (Q4).
+**Steps (on GitHub, in this order):**
+1. Backend: merge PR "P0-00 Security fixes and sandbox guards" (#12), then the PR from
+   `feat/P1-guest-service`. Wait for the "CI/CD" run on main to finish green (about 6 minutes; it
+   backs up the database, migrates and health-checks automatically).
+2. Frontend: merge PR #1, then the PR from `feat/P1-guest-service`. Cloudflare Pages deploys in
+   about 2 minutes.
+3. Tell me, and I check the live site (health, guest menu, service board) and fix anything.
+
 ## Assumptions made (say if one is wrong)
 
 - **A1 (P0-00).** A server without `APP_ENV` runs as `prelaunch`: sandbox rules apply and emails go
   only to `SANDBOX_ALLOWED_RECIPIENTS`, or to the `ADMIN_EMAILS` accounts while that list is empty.
   Consequence today: a stranger who signs up on menu.arishub.site gets no verification email. This
   is the plan's intended pre-launch protection.
+- **A2 (pitch).** For the 2026-10-04 pitch the plan order was changed: after P0-00, the Phase 1
+  guest and staff features were built before the rest of Phase 0.
+- **A3.** Plan entitlements are not enforced on the new features until P0-03 builds plans; during
+  the trial every feature is unlocked anyway (reverse trial).
+- **A4.** The owner dashboard and staff board stay in French until the rest of P0-05; the guest
+  menu is in French, Arabic and English.
