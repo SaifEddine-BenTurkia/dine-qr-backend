@@ -98,6 +98,8 @@ model Restaurant {
   orders            Order[]
   bills             Bill[]
   pushSubscriptions PushSubscription[]
+  loyaltyProgram    LoyaltyProgram?
+  loyaltyCards      LoyaltyCard[]
 }
 
 // A physical table with its own QR code (P1-01). The token is random and
@@ -423,10 +425,13 @@ model Bill {
   method           PaymentMethod
   paidAt           DateTime      @default(now())
   cashierName      String?
+  // The loyalty card stamped by this payment, if any (L-01).
+  loyaltyCardId    String?
 
-  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  table      DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  orders     Order[]
+  restaurant  Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table       DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  orders      Order[]
+  loyaltyCard LoyaltyCard? @relation(fields: [loyaltyCardId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId, paidAt])
 }
@@ -456,4 +461,68 @@ model PushSubscription {
   staff      StaffMember? @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId, role])
+}
+
+// Loyalty (L-01…L-03): one stamp-card program per restaurant.
+model LoyaltyProgram {
+  restaurantId     String   @id
+  enabled          Boolean  @default(false)
+  // "9 achats = 1 offert": stamps needed for one reward, and the reward.
+  stampsRequired   Int      @default(9)
+  rewardText       String   @default("1 consommation offerte")
+  // One stamp per paid ticket of at least this amount (0 = every ticket).
+  minSpendMillimes Int      @default(0)
+  // Card design, shown on the web card and in Google Wallet.
+  cardTitle        String?
+  backgroundColor  String   @default("#7c2d12")
+  stampIcon        String   @default("coffee")
+  terms            String?
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+}
+
+model LoyaltyCard {
+  id              String    @id @default(uuid())
+  restaurantId    String
+  // Random code: the card's address (/c/<code>) and the content of its QR.
+  code            String    @unique
+  name            String
+  phone           String
+  // Stamps not yet turned into a reward; a reward costs stampsRequired.
+  stamps          Int       @default(0)
+  totalStamps     Int       @default(0)
+  rewardsRedeemed Int       @default(0)
+  consentAt       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  lastStampAt     DateTime?
+
+  restaurant Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  events     LoyaltyEvent[]
+  bills      Bill[]
+
+  @@unique([restaurantId, phone])
+  @@index([restaurantId, createdAt])
+}
+
+enum LoyaltyEventType {
+  STAMP
+  REDEEM
+}
+
+model LoyaltyEvent {
+  id           String           @id @default(uuid())
+  cardId       String
+  restaurantId String
+  type         LoyaltyEventType
+  quantity     Int
+  // A bill stamps one card, once.
+  billId       String?          @unique
+  actor        String?
+  createdAt    DateTime         @default(now())
+
+  card LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, createdAt])
+  @@index([cardId, createdAt])
 }

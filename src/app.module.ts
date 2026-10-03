@@ -11,6 +11,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
 import { InsightsModule } from './insights/insights.module';
+import { LoyaltyModule } from './loyalty/loyalty.module';
 import { MediaModule } from './media/media.module';
 import { MenuModule } from './menu/menu.module';
 import { OrdersModule } from './orders/orders.module';
@@ -50,6 +51,7 @@ import { TablesModule } from './tables/tables.module';
     StaffModule,
     OrdersModule,
     PushModule,
+    LoyaltyModule,
     ServiceModule,
     AdminModule,
   ],

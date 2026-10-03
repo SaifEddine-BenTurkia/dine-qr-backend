@@ -115,6 +115,10 @@ class PayDto {
   @Min(0)
   @Max(100_000_000)
   discountMillimes?: number;
+
+  @IsOptional()
+  @IsUUID()
+  loyaltyCardId?: string;
 }
 
 class DayQuery {

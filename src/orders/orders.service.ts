@@ -15,6 +15,7 @@ import {
 import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
 import { formatDinars, fromMillimes, sumMillimes } from '../common/money';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
@@ -96,6 +97,7 @@ export class OrdersService {
     private readonly hub: ServiceHub,
     private readonly entitlements: EntitlementsService,
     private readonly push: PushService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   /** The caisse belongs to Premium; counter sales and closing to Business. */
@@ -358,6 +360,7 @@ export class OrdersService {
       orderIds: string[];
       method: PaymentMethod;
       discountMillimes?: number;
+      loyaltyCardId?: string;
     },
   ) {
     const restaurantId = await this.restaurantFor(userId);
@@ -406,6 +409,18 @@ export class OrdersService {
       return created;
     });
     this.hub.publish(restaurantId, { kind: 'bill', id: bill.id });
+    if (input.loyaltyCardId) {
+      // The payment stands even if the stamp cannot be given.
+      const stamped = await this.loyalty
+        .stampForBill(restaurantId, input.loyaltyCardId, bill, actor)
+        .catch(() => null);
+      if (stamped?.stamped) {
+        await this.prisma.bill.update({
+          where: { id: bill.id },
+          data: { loyaltyCardId: input.loyaltyCardId },
+        });
+      }
+    }
     return this.receipt(userId, bill.id);
   }
 
@@ -448,6 +463,9 @@ export class OrdersService {
     return {
       id: bill.id,
       number: bill.number,
+      loyalty: bill.loyaltyCardId
+        ? await this.loyalty.receiptLine(restaurantId, bill.loyaltyCardId)
+        : null,
       table: bill.table?.label ?? null,
       paidAt: bill.paidAt,
       method: bill.method,

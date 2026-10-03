@@ -11,6 +11,7 @@ import { EntitlementsService } from '../billing/entitlements.service';
 import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
 import { toCategoryView, toDishView } from '../menu/menu.views';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 import { toRestaurantView } from '../restaurant/restaurant.service';
@@ -59,6 +60,7 @@ export class PublicMenuService {
     private readonly hub: ServiceHub,
     private readonly entitlements: EntitlementsService,
     private readonly push: PushService,
+    private readonly loyalty: LoyaltyService,
     config: ConfigService,
   ) {
     this.salt = config.get<string>('SCAN_HASH_SALT') ?? 'development-salt';
@@ -114,6 +116,8 @@ export class PublicMenuService {
         orderingEnabled: ordering,
       },
       features: { serviceCalls: plan.serviceCalls, ordering },
+      // The stamp card guests can get from the menu, when the program is on.
+      loyalty: await this.loyalty.publicProgram(restaurant.id, plan.loyalty),
       categories: restaurant.categories.map((category) => ({
         ...toCategoryView(category),
         dishes: category.dishes.map(toDishView),
