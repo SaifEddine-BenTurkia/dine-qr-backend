@@ -3,6 +3,10 @@
 This replaces the order of PLAN.md from Phase 2 on. PLAN.md stays the reference for engineering
 rules (sandbox, tests, i18n, security); feature specs below follow its format.
 
+**Status on 2026-10-03:** everything in the build order below is built (P0-04, P0-11 lean, O-01 to
+O-06, P0-03, L-01 to L-03, S-01 to S-04) except P1-10, P1-11 and the P7 redesign. "Several outlets"
+is not built and is not sold. See PROGRESS.md.
+
 ## What changed and why
 
 - **Kept and moved first:** table ordering, a cashier screen ("caisse") that accepts orders and

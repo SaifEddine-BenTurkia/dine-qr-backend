@@ -36,13 +36,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof body === 'object' && body && 'code' in body
           ? (body as { code?: unknown }).code
           : undefined;
-      res
-        .status(status)
-        .json(
-          typeof code === 'string'
-            ? { statusCode: status, message, code }
-            : { statusCode: status, message },
-        );
+      const requiredPlan =
+        typeof body === 'object' && body && 'requiredPlan' in body
+          ? (body as { requiredPlan?: unknown }).requiredPlan
+          : undefined;
+      res.status(status).json({
+        statusCode: status,
+        message,
+        ...(typeof code === 'string' && { code }),
+        ...(typeof requiredPlan === 'string' && { requiredPlan }),
+      });
       return;
     }
 

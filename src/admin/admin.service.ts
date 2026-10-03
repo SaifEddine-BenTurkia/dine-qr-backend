@@ -14,6 +14,7 @@ import {
   type EffectiveStatus,
 } from '../billing/subscription-status';
 import { fromMillimes } from '../common/money';
+import { effectivePlan } from '../billing/plan-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -348,6 +349,8 @@ export class AdminService {
             : null,
           subscription: {
             status: effective,
+            plan: effectivePlan(user.subscription),
+            paidPlan: user.subscription?.plan ?? null,
             trialEndsAt: user.subscription?.trialEndsAt ?? null,
             currentPeriodEnd: user.subscription?.currentPeriodEnd ?? null,
             accessEndsAt: accessEndsAt(user.subscription),

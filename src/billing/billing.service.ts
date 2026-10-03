@@ -18,6 +18,15 @@ import { AdminAccess } from '../common/admin';
 import { MailService } from '../mail/mail.service';
 import { fromMillimes, millimes } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ENTITLEMENTS,
+  PLAN_NAMES,
+  buildCatalog,
+  effectivePlan,
+  isPlanId,
+  type Catalog,
+  type PlanId,
+} from './plan-catalog';
 import { CURRENCY, parsePlans, type PaymentContact, type Plan } from './plans';
 import {
   addMonths,
@@ -31,6 +40,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const REFERENCE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export interface CreatePaymentRequestInput {
+  plan?: PlanId;
   months: number;
   contactMethod: PaymentContactMethod;
   note?: string;
@@ -41,6 +51,7 @@ export class BillingService {
   private readonly logger = new Logger(BillingService.name);
   private readonly pricePerMonth: number;
   private readonly plans: Plan[];
+  private readonly catalog: Catalog;
   private readonly trialDays: number;
   private readonly contact: PaymentContact;
 
@@ -55,6 +66,18 @@ export class BillingService {
     this.plans = parsePlans(
       config.get<string>('PAYMENT_PLANS'),
       this.pricePerMonth,
+    );
+    const priceOf = (name: string, fallback: number) => {
+      const value = Number(config.get<string>(name));
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    };
+    this.catalog = buildCatalog(
+      {
+        standard: this.pricePerMonth,
+        premium: priceOf('PRICE_PREMIUM_TND', 99),
+        business: priceOf('PRICE_BUSINESS_TND', 179),
+      },
+      this.plans,
     );
     this.trialDays = Number(config.get<string>('TRIAL_DAYS') ?? 30) || 30;
     this.contact = {
@@ -100,7 +123,8 @@ export class BillingService {
 
   /** Puts a cash payment in the admin queue. One open request per owner. */
   async createPaymentRequest(userId: string, input: CreatePaymentRequestInput) {
-    const plan = this.plans.find((p) => p.months === input.months);
+    const planId = input.plan ?? 'standard';
+    const plan = this.offer(planId, input.months);
     if (!plan) throw new BadRequestException('Durée non proposée');
 
     const request = await this.prisma.$transaction(async (tx) => {
@@ -120,6 +144,7 @@ export class BillingService {
           reference: generateReference(),
           userId,
           months: plan.months,
+          plan: planId,
           amountMillimes: millimes(plan.amount),
           currency: CURRENCY,
           contactMethod: input.contactMethod,
@@ -232,9 +257,16 @@ export class BillingService {
           userId: request.userId,
           status: 'active',
           currency: request.currency,
+          plan: request.plan,
           currentPeriodEnd: periodEnd,
         },
-        update: { status: 'active', currentPeriodEnd: periodEnd },
+        // The plan paid for applies at once; the time is added after what
+        // the owner still has.
+        update: {
+          status: 'active',
+          plan: request.plan,
+          currentPeriodEnd: periodEnd,
+        },
       });
 
       return { request, periodEnd };
@@ -262,17 +294,26 @@ export class BillingService {
   async recordCashPayment(
     userId: string,
     adminEmail: string,
-    input: { months: number; amountReceived?: number; adminNote?: string },
+    input: {
+      months: number;
+      plan?: PlanId;
+      amountReceived?: number;
+      adminNote?: string;
+    },
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true },
     });
     if (!user) throw new NotFoundException('Compte introuvable');
-    const plan = this.plans.find((p) => p.months === input.months);
+    const planId = input.plan ?? 'standard';
+    const plan = this.offer(planId, input.months);
+    const monthly =
+      this.catalog.find((p) => p.id === planId)?.pricePerMonth ??
+      this.pricePerMonth;
     const amountMillimes = plan
       ? millimes(plan.amount)
-      : millimes(this.pricePerMonth) * input.months;
+      : millimes(monthly) * input.months;
     const amount = fromMillimes(amountMillimes);
 
     const request = await this.prisma.paymentRequest.create({
@@ -280,6 +321,7 @@ export class BillingService {
         reference: generateReference(),
         userId,
         months: input.months,
+        plan: planId,
         amountMillimes,
         currency: CURRENCY,
         contactMethod: 'PHONE',
@@ -293,7 +335,32 @@ export class BillingService {
   }
 
   get pricing() {
-    return { pricePerMonth: this.pricePerMonth, plans: this.plans };
+    return {
+      pricePerMonth: this.pricePerMonth,
+      plans: this.plans,
+      catalog: this.catalog,
+    };
+  }
+
+  private offer(planId: PlanId, months: number) {
+    return this.catalog
+      .find((p) => p.id === planId)
+      ?.offers.find((o) => o.months === months);
+  }
+
+  /** Admin: change the plan without a payment (gift, correction). */
+  async setPlan(userId: string, plan: PlanId) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { userId },
+    });
+    if (!subscription) {
+      throw new NotFoundException("Ce compte n'a pas encore d'abonnement");
+    }
+    await this.prisma.subscription.update({
+      where: { userId },
+      data: { plan },
+    });
+    return { plan, planName: PLAN_NAMES[plan] };
   }
 
   async reject(id: string, adminEmail: string, adminNote?: string) {
@@ -330,8 +397,15 @@ export class BillingService {
     subscription: Subscription | null,
     pending: PaymentRequest | null,
   ) {
+    const plan = effectivePlan(subscription);
     return {
       status: effectiveStatus(subscription),
+      // What applies now (everything during the trial) and what was paid for.
+      plan,
+      paidPlan:
+        subscription && isPlanId(subscription.plan) ? subscription.plan : null,
+      entitlements: ENTITLEMENTS[plan],
+      catalog: this.catalog,
       trialEndsAt: subscription?.trialEndsAt ?? null,
       currentPeriodEnd: subscription?.currentPeriodEnd ?? null,
       pricePerMonth: this.pricePerMonth,
@@ -404,6 +478,7 @@ export function toRequestView(request: PaymentRequest) {
     id: request.id,
     reference: request.reference,
     months: request.months,
+    plan: request.plan,
     amount: fromMillimes(request.amountMillimes),
     currency: request.currency,
     contactMethod: request.contactMethod,

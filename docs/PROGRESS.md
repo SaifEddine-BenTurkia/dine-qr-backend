@@ -8,6 +8,21 @@ Plan: [PLAN.md](PLAN.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 _Updated every 5 features._
 
+**2026-10-03, complete build (owner: "finish everything").** On branch `feat/complete` in both
+repos, on top of the merged ordering work.
+
+- **Done (14):** P0-03 three packs with entitlements; O-06 order screen with ring, web push and
+  installable staff app; L-01, L-02, L-03 loyalty, Google Wallet service, card designer; S-01 to
+  S-04 stock, expiry, sales, anti-waste suggestions and promo prices; UX-01 usability pass
+  (navigation, home, settings, guest ordering).
+- **Blocked on the owner:** merge of the two PRs (Q4); Google Wallet issuer account (Q10); real
+  phone check of notifications (Q11); thermal printer (Q9); key rotation (Q1).
+- **Assumptions:** A8 (trial unlocks everything), A9 (a pack payment applies at once), A10 (stock
+  held when the order is created), A11 (push keys kept in the database), A12 (multi-outlet not sold
+  yet), A13 (CSP still report-only).
+- **Next:** verify the deploy and notifications on real devices, enforce the CSP, then P1-10 print
+  studio, P1-11 weekly report, Account/Membership for several outlets, P7 visual redesign.
+
 **2026-10-03, ADM-02 and data reset.** PRs #15/#3 merged and live. Production data reset at the
 owner's request (only the admin login kept; backup taken first). ADM-02: the console is hidden (404)
 and protected by an authenticator code.
@@ -46,13 +61,15 @@ S-03, S-04, then P1-10, P1-11, P7. Dropped: online payments, Google reviews hub,
 | O-03 | Ticket printing | done | Kitchen ticket, receipt, Z at 58/80 mm; real printer check waits for Q9 |
 | O-04 | Bill and payment at the counter | done | Pay per table, discount, cash/card, Z report |
 | O-05 | Counter sales | done | Counter grid, takeaway paid at once |
-| L-01 | Loyalty program | todo | |
-| L-02 | Google Wallet card | todo | Needs Google Wallet issuer account (owner) |
-| L-03 | Card designer | todo | |
-| S-01 | Stock per dish | todo | |
-| S-02 | Batches and expiry | todo | |
-| S-03 | Sales vs stock | todo | |
-| S-04 | Anti-waste suggestions | todo | |
+| L-01 | Loyalty program | done | Stamps, guest card, stamp at payment, reward |
+| L-02 | Google Wallet card | done | Service built and tested against fakes; live pass waits for Q10 |
+| L-03 | Card designer | done | Colour, title, stamp icon, live preview |
+| S-01 | Stock per dish | done | Sold out at 0, stock held by orders |
+| S-02 | Batches and expiry | done | Sell-by time, expired stock leaves as waste |
+| S-03 | Sales vs stock | done | Per dish: today, 7 days, pace, days of stock |
+| S-04 | Anti-waste suggestions | done | Promo, restock and slow-seller rules; promo price in one tap |
+| O-06 | Order screen: ring, notifications, installable app | done | Web push; real phone check waits for Q11 |
+| UX-01 | Usability pass | done | Navigation, home, settings tabs, guest ordering flow |
 
 ## Owner requests outside the plan
 
@@ -74,7 +91,7 @@ Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-
 | P0-13 | Final domain | todo | |
 | P0-04 | Money in millimes | done | Integer millimes in DB, shared helpers, exact migration |
 | P0-11 | Account model and roles | done (lean) | Staff PIN logins and roles; Account/Membership restructure deferred (A5) |
-| P0-03 | Plans, entitlements, feature flags | todo | |
+| P0-03 | Plans, entitlements, feature flags | done | Standard / Premium / Business, enforced on the server |
 | P0-05 | i18n and RTL | in progress | Guest menu done (fr/ar/en, RTL) with P1-03; dashboard, emails, lint rule still to do |
 | P0-06 | Event tracking | in progress | Event table, guest tracker and server events built with P1-09; daily aggregates and Scan migration still to do |
 | P0-07 | Jobs and scheduler | todo | |

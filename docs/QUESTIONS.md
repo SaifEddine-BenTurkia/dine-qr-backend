@@ -87,6 +87,36 @@ mode: only after the first paying customer) or keep prelaunch and list the owner
 printer check is still needed. **What:** one 80 mm USB thermal printer (ESC/POS, e.g. Xprinter
 XP-80, around 150–250 DT). Setup steps are in docs/features/O-03-printing.md.
 
+### Q10. Google Wallet issuer account (2026-10-03)
+**Why:** loyalty cards can be added to Google Wallet only with an issuer account in your name.
+Until then guests use the web card (same stamps, same QR code).
+**Steps:**
+1. https://pay.google.com/business/console → "Google Wallet API" → create the issuer account
+   (free). Note the **Issuer ID**.
+2. https://console.cloud.google.com → a project → enable "Google Wallet API" → IAM → Service
+   accounts → create one → Keys → add a JSON key (downloads a file).
+3. In the Wallet console → Users → invite the service account's email as **Developer**.
+4. On the server, in the TableQR env file: `GOOGLE_WALLET_ISSUER_ID=<the ID>` and
+   `GOOGLE_WALLET_SERVICE_ACCOUNT=<the JSON file encoded in base64 on one line>`
+   (`base64 -w0 key.json`), then redeploy. The account starts in demo mode: only test users you add
+   in the console can save passes, until Google approves it for everyone.
+
+### Q11. Check notifications on real phones (2026-10-03)
+**Why:** push delivery depends on the phone and cannot be tested from here.
+**Steps after the deploy:** follow CHANGELOG "Test manually" steps 2 and 3 with an Android phone
+(Chrome) locked in your pocket. On an iPhone: Safari → Share → "Sur l'écran d'accueil" first, open
+the app from the icon, then activate notifications. Tell me what you see.
+
+### Q12. Loyalty cards store personal data (2026-10-03)
+**Why:** the card keeps a first name and a phone number, with the guest's consent tick. In Tunisia
+personal data processing is declared to the INPDP (law 2004-63). **Decision for you / your
+adviser:** declare the processing before real customers join; the consent text is in
+`guest-i18n.ts` (`loyaltyConsent`).
+
+### Q13. Confirm the pack prices (2026-10-03)
+49 / 99 / 179 DT per month, a year = 10 months. To change them: `PRICE_TND`, `PRICE_PREMIUM_TND`,
+`PRICE_BUSINESS_TND` on the server (and the defaults in `src/lib/plans.tsx` for the landing page).
+
 ## Assumptions made (say if one is wrong)
 
 - **A1 (P0-00).** A server without `APP_ENV` runs as `prelaunch`: sandbox rules apply and emails go
@@ -103,3 +133,11 @@ XP-80, around 150–250 DT). Setup steps are in docs/features/O-03-printing.md.
   Membership model for several outlets per account comes with the Business plan's multi-outlet.
 - **A6.** A service day runs from 05:00 to 05:00 Tunis time (order numbers and the closing).
 - **A7.** Receipts say "Ticket non fiscal": TableQR is not a certified fiscal cash register.
+- **A8.** The trial unlocks every feature (the owner tries everything, then picks a pack).
+- **A9.** A pack payment applies the pack at once and adds the time after what remains; there is no
+  pro-rata when changing pack mid-period (payments are manual, the admin can adjust).
+- **A10.** Stock is held when an order is created, and returned if it is refused or cancelled.
+- **A11.** The web push keys live in the database, sealed with a key derived from `JWT_SECRET`.
+- **A12.** "Several outlets" is not sold in the Business pack yet (needs the account model).
+- **A13.** The CSP stays report-only for this release; it passed enforced on 15 screens locally.
+

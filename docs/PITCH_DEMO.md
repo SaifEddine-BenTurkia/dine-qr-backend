@@ -1,67 +1,70 @@
-# TableQR pitch demo (2026-10-04)
+# TableQR demo (updated 2026-10-03, complete build)
 
-A 5-minute live demo with two devices: a phone as the guest, a laptop or tablet as the staff
-screen. It also serves as the manual test of the pitch build.
+A 6-minute live demo with three devices: a phone as the guest, a tablet or laptop as the caisse,
+a second phone as the waiter. It also serves as the manual test of the build.
 
-## Before the pitch (about 15 minutes, once the PRs are merged)
+## Before the demo (about 15 minutes, once the two PRs are merged and deployed)
 
-1. **Admin and restaurant are now separate accounts.** Your `ADMIN_EMAILS` account only opens the
-   console (`/admin`). If your demo restaurant was created under it: log in, Console →
-   Restaurants → "Nouveau compte restaurant", pick an email you control (it does not need to
-   receive mail), a password, and "Lui confier un restaurant existant" → your restaurant. Then log
-   out and log in with that new account for the whole demo. You can show the console at the end
-   with the admin account (Activité shows the visits and calls of the demo).
-2. **Restaurant**: name, logo, colour, template "Classique" or "Élégant". Under the new sections:
-   - Langues du menu: tick العربية and English.
-   - WiFi: a network name and password.
-   - Place ID Google: your restaurant's Place ID (or any real one for the demo).
-3. **Menu**: 6 to 10 dishes with photos. Click **Traduire** → English, then العربية. Open one dish
-   to show the "IA · à vérifier" badge and tick "Vérifiée".
-   (Needs a working OpenRouter key on the server. Without one, type two or three translations by
-   hand in the dish window: the guest menu works the same.)
-4. **Tables**: "Ajouter des tables" → 8 tables in "Salle", then 4 in "Terrasse".
-5. Open the QR of table **T3** on the laptop (click it) and keep it ready to scan.
-6. On the laptop/tablet open **Service** and tap **Activer le son**.
-7. Do one full rehearsal (below), then reset: on the Service page tap "Fait" on everything.
+1. **Accounts.** The admin account only opens the console (`/admin`). Do the demo with a
+   restaurant account (Console → Restaurants → "Nouveau compte restaurant" creates one, and
+   "Valider l'email" opens it without waiting for the email).
+2. **Réglages** (five tabs):
+   - Identité: name, logo. Apparence: colour, style.
+   - Langues: tick العربية and English.
+   - Commande et ticket: turn on "Commande depuis la table".
+   - WiFi et avis Google: network name and password.
+3. **Carte**: 6 to 10 dishes with photos. "Traduire" → English, then العربية (needs a working
+   OpenRouter key on the server; otherwise type two or three translations by hand).
+4. **Tables et QR codes**: "Ajouter des tables" → 8 in "Salle". Open the QR of **T3** and keep it
+   ready to scan.
+5. **Équipe**: add a cashier (PIN 1234) and a waiter (PIN 5678).
+6. **Fidélité**: "Activer la carte", 9 stamps, "1 café offert", pick a colour and an icon.
+7. **Stock**: on one dish, add 10 "Ce soir".
+8. **Tablet**: open `/staff`, restaurant code + PIN 1234, then "Activer le son" and "Activer les
+   notifications". Install it ("Installer l'application") so it opens full screen.
+   **Waiter phone**: `/staff`, PIN 5678, activate notifications, then lock the phone.
+   (iPhone: add to the home screen first, then activate notifications from the installed app.)
+9. Do one full rehearsal (below).
 
 ## The demo (talk track in italics)
 
-1. **Scan T3 with the phone.** *"No app. The guest scans the table's QR code: the menu opens in the
-   language of their phone, here French, and it knows they're at table 3."*
-2. **Switch to العربية.** *"Arabic, right to left, and English for tourists. Tunisian dishes keep
-   their names with a short explanation."*
-3. **Tap "Serveur" → "Appeler le serveur".** The laptop chimes and shows **T3** within a second.
-   *"No more waving at the waiter."* Tap **J'arrive** on the laptop: the phone shows *"Un serveur
-   arrive"*.
-4. **WiFi.** *"The most asked question in a café, answered: tap, copy, or scan to join."*
-5. **"+ Sélection" on two dishes → Sélection → Montrer au serveur.** *"Guests build their order
-   and show it: big text, table number, total. Next step: send it straight to the kitchen."*
-6. **Sold out.** On the laptop, Menu → a dish → "Épuisé jusqu'à demain". Within 5 seconds the
-   phone greys it out. *"No more 'sorry, we're out of brik' after the guest has chosen."*
-7. **Addition → Carte.** It appears on the board. *"The bill request, with how they want to pay."*
-8. **Feedback: 2 stars, tag "Attente".** The laptop shows a red alert *"Table T3 — 2/5"*.
-   *"The manager knows before the guest leaves, and can fix it."* Point at the Google button:
-   *"Every guest sees the same Google review button, whatever their rating: that's Google's rule,
-   and we follow it."*
-9. **Accueil (home).** *"Ce mois-ci avec TableQR": visits, calls handled, average response time,
-   reviews, Google clicks, busiest hours, languages of your guests, dishes viewed but rarely
-   chosen.* *"Every number is something the owner can act on."*
-10. **Tables → Imprimer toutes.** Print preview with one QR card per table, French and Arabic.
+1. **Scan T3 with the guest phone.** *"No app. The menu opens in the language of the phone, and it
+   knows the guest is at table 3."* Switch to العربية and back.
+2. **"Ajouter" on two dishes → "Voir la commande" → "Envoyer la commande".** The tablet rings and
+   shows the order under **Nouvelles**. *"The order lands on the caisse, and it keeps ringing until
+   someone takes it."*
+3. **Tablet: "Accepter".** The kitchen ticket prints (or the print preview opens). The guest phone
+   shows "En préparation". *"The guest follows the order without asking."*
+4. **"Prête".** The waiter's locked phone gets "Commande N° 7 prête · À servir table T3". **"Servie · table T3".**
+5. **Guest phone: "Serveur" → "Demander l'addition".** It appears under **Appels** on the tablet.
+6. **Guest phone: "Obtenir ma carte"**, first name and phone. The card opens with its QR code.
+7. **Tablet: À encaisser → T3 → "Carte de fidélité du client"** → type the name → **Espèces**.
+   The receipt prints with "Fidélité · <name> 1 / 9 tampons"; the guest's card shows the stamp.
+8. **Stock** (owner dashboard). *"Ten portions for tonight, two sold: TableQR proposes −30 % until
+   closing."* Apply it: the guest menu shows the old price struck and the promo price.
+9. **Accueil.** "Vos outils" lists every feature and its state; "Ce mois-ci avec TableQR" shows
+   visits, calls, response time, best sellers.
+10. **Clôture** on the tablet: the day's total by payment method, printable.
+11. **Abonnement.** The three packs: Standard 49 DT, Premium 99 DT, Business 179 DT.
 
 ## If something goes wrong
 
 - **Production not merged or down:** run it locally (Docker Desktop, `docker compose up -d
-  postgres` and `npm run start:dev` in the backend, `npm run dev` in the frontend) and use
-  `http://localhost:5173`. The phone must be on the same network; use the laptop's IP instead of
-  localhost, or demo the guest side in the browser's phone view (F12 → device toolbar).
-- **Live board not updating instantly:** it still refreshes every 5 seconds on its own.
-- **AI translation fails:** the OpenRouter key on the server is the leaked one or out of credit
-  (QUESTIONS Q1). Type the translations by hand.
+  postgres`, `npm run seed` and `npm run start:dev` in the backend, `npm run dev` in the frontend)
+  and use `http://localhost:5173`. The seed creates "Café Tunis Centre"
+  (`cafe-tunis@seed.tableqr.test` / `Demo-pass-123`, PINs 1234, 5678, 4321) with two weeks of sales.
+  Notifications need HTTPS, so they only work on the deployed site; the ring works everywhere.
+- **No ring:** tap "Activer le son" once (browsers require a tap before playing sound).
+- **No notification on the locked phone:** the caisse still rings and refreshes; see QUESTIONS Q11.
+- **No printer:** the print preview shows the ticket; a real thermal printer is QUESTIONS Q9.
+- **AI translation fails:** the OpenRouter key is out of credit or revoked (QUESTIONS Q1). Type
+  the translations by hand.
 
 ## What to say about the roadmap
 
-Built and demonstrable now: tables and QR, service calls, live staff board, sold out, three
-languages with Arabic, selection, compliant feedback with alerts, value dashboard.
-Next in the plan: plans and pricing tiers, multi-restaurant accounts and staff logins, Google
-reviews with AI replies, WhatsApp, table ordering with kitchen display, online payments
-(Flouci, Konnect), smart pricing, loyalty.
+Built: tables and QR, three languages with Arabic, table ordering, live caisse with ring and
+notifications, kitchen tickets and receipts, counter sales and daily closing, staff logins by PIN,
+loyalty stamp card (Google Wallet ready), stock with expiry and anti-waste promos, three packs,
+feedback with alerts, value dashboard, admin console.
+Next: print studio for table cards, weekly email report, several outlets under one account, the
+visual redesign. Dropped by decision: online payments, Google reviews hub, AI advisor.
