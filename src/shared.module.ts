@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { EntitlementsService } from './billing/entitlements.service';
 import { AdminAccess, AdminGuard } from './common/admin';
 import { JwtAuthGuard } from './common/auth.guard';
 import { MailService } from './mail/mail.service';
@@ -30,6 +31,7 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
     RecipientPolicy,
     MediaService,
     RestaurantAccessService,
+    EntitlementsService,
   ],
   exports: [
     JwtModule,
@@ -40,6 +42,7 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
     RecipientPolicy,
     MediaService,
     RestaurantAccessService,
+    EntitlementsService,
   ],
 })
 export class SharedModule {}

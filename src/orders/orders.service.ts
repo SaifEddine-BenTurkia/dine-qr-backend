@@ -8,6 +8,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type OrderStatus, type PaymentMethod } from '@prisma/client';
+import {
+  EntitlementsService,
+  planRequired,
+} from '../billing/entitlements.service';
+import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
 import { fromMillimes, sumMillimes } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
@@ -82,7 +87,18 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly access: RestaurantAccessService,
     private readonly hub: ServiceHub,
+    private readonly entitlements: EntitlementsService,
   ) {}
+
+  /** The caisse belongs to Premium; counter sales and closing to Business. */
+  private async restaurantFor(
+    userId: string,
+    feature: 'ordering' | 'counterSales' = 'ordering',
+  ) {
+    const restaurantId = await this.access.restaurantIdFor(userId);
+    await this.entitlements.require(restaurantId, feature);
+    return restaurantId;
+  }
 
   /* ───────────── guest side (O-01) ───────────── */
 
@@ -109,6 +125,9 @@ export class OrdersService {
         "Ce menu n'est pas disponible pour le moment",
         HttpStatus.PAYMENT_REQUIRED,
       );
+    }
+    if (!ENTITLEMENTS[effectivePlan(restaurant.user.subscription)].ordering) {
+      throw planRequired('ordering');
     }
     if (!restaurant.orderingEnabled) {
       throw new ForbiddenException(
@@ -195,7 +214,7 @@ export class OrdersService {
 
   /** Orders still in progress, plus today's closed ones for the history. */
   async list(userId: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const day = serviceDay();
     const orders = await this.prisma.order.findMany({
       where: {
@@ -217,7 +236,7 @@ export class OrdersService {
     actor: string,
     input: { items: OrderLineInput[]; note?: string; tableId?: string },
   ) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId, 'counterSales');
     if (input.tableId) {
       const table = await this.prisma.diningTable.count({
         where: { id: input.tableId, restaurantId },
@@ -246,7 +265,7 @@ export class OrdersService {
     next: 'ACCEPTED' | 'REJECTED' | 'READY' | 'SERVED',
     reason?: string,
   ) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const from: Record<typeof next, OrderStatus[]> = {
       ACCEPTED: ['PENDING'],
       REJECTED: ['PENDING'],
@@ -284,7 +303,7 @@ export class OrdersService {
 
   /** Open tabs: per table (and counter), the orders not yet paid. */
   async openTabs(userId: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const orders = await this.prisma.order.findMany({
       where: { restaurantId, billId: null, status: { in: BILLABLE } },
       include: orderInclude,
@@ -313,7 +332,7 @@ export class OrdersService {
       discountMillimes?: number;
     },
   ) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const bill = await this.prisma.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -421,7 +440,7 @@ export class OrdersService {
 
   /** Daily closing ("Z") for one service day: totals by payment method. */
   async dayReport(userId: string, dateKey?: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId, 'counterSales');
     const day = dateKey
       ? serviceDay(new Date(`${dateKey}T12:00:00Z`))
       : serviceDay();
@@ -449,7 +468,8 @@ export class OrdersService {
           },
         },
         _sum: { quantity: true, totalMillimes: true },
-        orderBy: { _sum: { quantity: 'desc' } },
+        // Ties sorted by name, so the list is stable.
+        orderBy: [{ _sum: { quantity: 'desc' } }, { name: 'asc' }],
         take: 15,
       }),
     ]);

@@ -23,6 +23,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { BillingService } from '../billing/billing.service';
+import { PLAN_IDS, type PlanId } from '../billing/plan-catalog';
 import type { EffectiveStatus } from '../billing/subscription-status';
 import { AdminGuard } from '../common/admin';
 import {
@@ -59,6 +60,10 @@ class RecordPaymentDto {
   @Min(1)
   @Max(24)
   months: number;
+
+  @IsOptional()
+  @IsIn(PLAN_IDS)
+  plan?: PlanId;
 
   @IsOptional()
   @Type(() => Number)
@@ -113,6 +118,11 @@ class CreateAccountDto {
   @IsString()
   @MaxLength(100)
   takeOverSlug?: string;
+}
+
+class SetPlanDto {
+  @IsIn(PLAN_IDS)
+  plan: PlanId;
 }
 
 class ExtendTrialDto {
@@ -171,6 +181,15 @@ export class AdminController {
     @Body() body: RecordPaymentDto,
   ) {
     return this.billing.recordCashPayment(userId, admin.email, body);
+  }
+
+  @HttpCode(200)
+  @Post('accounts/:userId/plan')
+  setPlan(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() body: SetPlanDto,
+  ) {
+    return this.billing.setPlan(userId, body.plan);
   }
 
   @HttpCode(200)

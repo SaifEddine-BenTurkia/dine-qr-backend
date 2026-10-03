@@ -7,6 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ServiceRequestType } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import { EntitlementsService } from '../billing/entitlements.service';
+import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
 import { toCategoryView, toDishView } from '../menu/menu.views';
 import { PrismaService } from '../prisma/prisma.service';
@@ -54,6 +56,7 @@ export class PublicMenuService {
     private readonly prisma: PrismaService,
     private readonly requests: ServiceRequestsService,
     private readonly hub: ServiceHub,
+    private readonly entitlements: EntitlementsService,
     config: ConfigService,
   ) {
     this.salt = config.get<string>('SCAN_HASH_SALT') ?? 'development-salt';
@@ -91,8 +94,24 @@ export class PublicMenuService {
     const table = tableToken
       ? restaurant.tables.find((t) => t.token === tableToken)
       : undefined;
+    // What the plan allows decides what the guest sees (P0-03).
+    const plan = ENTITLEMENTS[effectivePlan(restaurant.user.subscription)];
+    const view = toRestaurantView(restaurant);
+    const locales =
+      plan.locales === 'all'
+        ? view.enabledLocales
+        : view.enabledLocales.filter((code) => plan.locales.includes(code));
+    const ordering = plan.ordering && restaurant.orderingEnabled;
     return {
-      restaurant: toRestaurantView(restaurant),
+      restaurant: {
+        ...view,
+        enabledLocales: locales.length ? locales : ['fr'],
+        defaultLocale: locales.includes(view.defaultLocale)
+          ? view.defaultLocale
+          : 'fr',
+        orderingEnabled: ordering,
+      },
+      features: { serviceCalls: plan.serviceCalls, ordering },
       categories: restaurant.categories.map((category) => ({
         ...toCategoryView(category),
         dishes: category.dishes.map(toDishView),
@@ -167,6 +186,7 @@ export class PublicMenuService {
     ref: GuestTableRef,
   ) {
     const restaurantId = await this.restaurantId(slug);
+    await this.entitlements.require(restaurantId, 'serviceCalls');
     return this.requests.createFromGuest(restaurantId, sessionId, type, ref);
   }
 

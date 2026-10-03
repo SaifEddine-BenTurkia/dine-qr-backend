@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, type StaffMember, type StaffRole } from '@prisma/client';
 import { createHmac } from 'node:crypto';
+import { EntitlementsService } from '../billing/entitlements.service';
 import type { JwtPayload } from '../common/auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
@@ -44,6 +46,7 @@ export class StaffService {
     private readonly access: RestaurantAccessService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   /** PINs are low-entropy: keyed with a server secret and the restaurant. */
@@ -68,6 +71,23 @@ export class StaffService {
     input: { name: string; role: StaffRole; pin: string },
   ) {
     const restaurantId = await this.access.restaurantIdFor(userId);
+    const { maxStaff } = await this.entitlements.of(restaurantId);
+    if (maxStaff !== null) {
+      const count = await this.prisma.staffMember.count({
+        where: { restaurantId },
+      });
+      if (count >= maxStaff) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          code: 'PLAN_REQUIRED',
+          requiredPlan: maxStaff === 0 ? 'premium' : 'business',
+          message:
+            maxStaff === 0
+              ? 'Les comptes équipe font partie du pack Premium'
+              : `Votre pack inclut ${maxStaff} membres. Le pack Business n'a pas de limite.`,
+        });
+      }
+    }
     try {
       const member = await this.prisma.staffMember.create({
         data: {
@@ -141,6 +161,14 @@ export class StaffService {
         },
       },
     });
+    if (member?.active) {
+      const { maxStaff } = await this.entitlements.of(restaurant.id);
+      if (maxStaff === 0) {
+        throw new ForbiddenException(
+          "L'espace équipe n'est pas inclus dans le pack de ce restaurant",
+        );
+      }
+    }
     if (!member || !member.active) {
       this.failures.set(restaurant.id, [
         ...this.windowed(restaurant.id),

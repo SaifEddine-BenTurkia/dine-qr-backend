@@ -15,6 +15,7 @@ function subscription(overrides: Partial<Subscription>): Subscription {
     userId: 'u',
     status: 'trialing',
     currency: 'TND',
+    plan: 'standard',
     trialEndsAt: null,
     currentPeriodEnd: null,
     createdAt: now,

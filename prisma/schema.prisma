@@ -227,6 +227,9 @@ model Subscription {
   userId           String             @unique
   status           SubscriptionStatus
   currency         String             @default("TND")
+  // standard | premium | business (src/billing/plan-catalog.ts). During the
+  // trial everything is unlocked whatever this says.
+  plan             String             @default("standard")
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
   createdAt        DateTime           @default(now())
@@ -256,6 +259,8 @@ model PaymentRequest {
   reference              String               @unique
   userId                 String
   months                 Int
+  // The plan this payment buys (standard, premium, business).
+  plan                   String               @default("standard")
   // Integer millimes (P0-04).
   amountMillimes         Int
   currency               String               @default("TND")
