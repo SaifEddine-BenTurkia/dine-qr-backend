@@ -14,17 +14,25 @@ const slug = process.argv[4];
 
 let failed = false;
 
-async function check(name: string, url: string, accept: number[]) {
+/** `contains`: text the body must hold (the frontend answers 200 to any path). */
+async function check(
+  name: string,
+  url: string,
+  accept: number[],
+  contains?: string,
+) {
   let status = 0;
+  let body = '';
   for (let attempt = 0; attempt < 3 && status === 0; attempt++) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
       status = res.status;
+      if (contains) body = await res.text();
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
-  const ok = accept.includes(status);
+  const ok = accept.includes(status) && (!contains || body.includes(contains));
   if (!ok) failed = true;
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${String(status).padEnd(4)} ${name}`);
 }
@@ -47,7 +55,23 @@ async function main() {
   }
   // The console must not admit it exists to an anonymous caller.
   await check('admin api hidden', `${api}/admin/overview`, [404]);
+  // Routes of the latest release: 401 proves they are deployed (404 = old build).
+  await check('notifications api', `${api}/push/key`, [401]);
+  await check('loyalty api', `${api}/loyalty/program`, [401]);
+  await check('stock api', `${api}/stock`, [401]);
   await check('frontend', `${web}/`, [200]);
+  await check(
+    'service worker',
+    `${web}/sw.js`,
+    [200],
+    'addEventListener("push"',
+  );
+  await check(
+    'staff app manifest',
+    `${web}/staff.webmanifest`,
+    [200],
+    '"start_url"',
+  );
   await check(
     `guest menu page (${slug ?? 'any'})`,
     `${web}/m/${slug ?? 'smoke-no-such-menu'}`,
