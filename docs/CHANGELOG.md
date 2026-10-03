@@ -2,6 +2,19 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## Ordering and caisse: P0-11 (lean), O-01 to O-05 (2026-10-03)
+
+- **Équipe**: staff with roles and PINs; staff sign in at /staff on the caisse device.
+- **Commande à table**: guests send their order from the table QR and follow its status.
+- **Caisse**: live orders with a chime, accept/refuse, ready/served, tables to pay, counter
+  sales, daily closing.
+- **Tickets**: kitchen ticket, receipt and Z report for 80 mm or 58 mm thermal printers.
+
+**Test manually:** Restaurant → turn on "Commande depuis la table" and fill the receipt details.
+Équipe → add a cashier with PIN 1234. On a tablet open /staff, type the restaurant code and 1234.
+On a phone scan a table QR, add two dishes, Commande → Envoyer. Accept it on the tablet, mark it
+ready, check the phone, then À encaisser → the table → Espèces. Finish with Clôture → Imprimer.
+
 ## P0-04 Money in millimes (2026-10-03)
 
 - Prices and payment amounts are stored as whole millimes; nothing changes on screen.
