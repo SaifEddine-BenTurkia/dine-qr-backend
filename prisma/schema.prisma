@@ -191,27 +191,36 @@ model Category {
 }
 
 model Dish {
-  id              String    @id @default(uuid())
-  categoryId      String
-  name            String
-  description     String?
+  id                 String    @id @default(uuid())
+  categoryId         String
+  name               String
+  description        String?
   // Integer millimes (1 DT = 1000), never floats (P0-04).
-  priceMillimes   Int
-  imageUrl        String?
-  position        Int
-  available       Boolean   @default(true)
+  priceMillimes      Int
+  imageUrl           String?
+  position           Int
+  available          Boolean   @default(true)
   // Sold out (P1-04): shown greyed "Épuisé"; soldOutUntil resets it (05:00 Tunis).
-  soldOut         Boolean   @default(false)
-  soldOutUntil    DateTime?
-  nameI18n        Json?
-  descriptionI18n Json?
+  soldOut            Boolean   @default(false)
+  soldOutUntil       DateTime?
+  nameI18n           Json?
+  descriptionI18n    Json?
   // Locales whose translation came from AI and is not yet checked by the owner.
-  aiLocales       String[]  @default([])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  aiLocales          String[]  @default([])
+  // Stock (S-01): when tracked, each sale takes from stockQty and the dish
+  // shows as sold out at 0. stockQty is the sum of its batches' remaining.
+  trackStock         Boolean   @default(false)
+  stockQty           Int       @default(0)
+  // Promo price (S-04): replaces the price until promoEndsAt.
+  promoPriceMillimes Int?
+  promoEndsAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category   Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems OrderItem[]
+  batches    StockBatch[]
+  movements  StockMovement[]
 
   @@index([categoryId, position])
 }
@@ -525,4 +534,52 @@ model LoyaltyEvent {
 
   @@index([restaurantId, createdAt])
   @@index([cardId, createdAt])
+}
+
+// Stock and anti-waste (S-01…S-04). A batch is one delivery or one day's
+// production, with an optional "sell by" time; sales take from the batch that
+// expires first.
+model StockBatch {
+  id           String    @id @default(uuid())
+  restaurantId String
+  dishId       String
+  quantity     Int
+  remaining    Int
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  dish      Dish            @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  movements StockMovement[]
+
+  @@index([dishId, expiresAt])
+  @@index([restaurantId, expiresAt])
+}
+
+enum StockMovementType {
+  RESTOCK
+  SALE
+  RETURN
+  WASTE
+  ADJUST
+}
+
+// Every change of stock, signed: + in, − out.
+model StockMovement {
+  id           String            @id @default(uuid())
+  restaurantId String
+  dishId       String
+  batchId      String?
+  type         StockMovementType
+  quantity     Int
+  reason       String?
+  actor        String?
+  orderId      String?
+  createdAt    DateTime          @default(now())
+
+  dish  Dish        @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  batch StockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId, createdAt])
+  @@index([dishId, createdAt])
+  @@index([orderId])
 }

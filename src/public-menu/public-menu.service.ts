@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 import { toRestaurantView } from '../restaurant/restaurant.service';
 import { ServiceHub } from '../service/service-hub';
+import { StockService } from '../stock/stock.service';
 import {
   ServiceRequestsService,
   type GuestTableRef,
@@ -61,12 +62,19 @@ export class PublicMenuService {
     private readonly entitlements: EntitlementsService,
     private readonly push: PushService,
     private readonly loyalty: LoyaltyService,
+    private readonly stock: StockService,
     config: ConfigService,
   ) {
     this.salt = config.get<string>('SCAN_HASH_SALT') ?? 'development-salt';
   }
 
   async getMenu(slug: string, tableToken?: string) {
+    // Stock past its date leaves the menu (checked at most once a minute).
+    const known = await this.prisma.restaurant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (known) await this.stock.sweepSoon(known.id).catch(() => undefined);
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
       include: {
@@ -120,7 +128,9 @@ export class PublicMenuService {
       loyalty: await this.loyalty.publicProgram(restaurant.id, plan.loyalty),
       categories: restaurant.categories.map((category) => ({
         ...toCategoryView(category),
-        dishes: category.dishes.map(toDishView),
+        dishes: category.dishes.map((dish) =>
+          toDishView(dish, { stock: plan.stock }),
+        ),
       })),
       // The table from the QR code, if any. Without one, guests pick their
       // table from the labels (never the tokens) when they call a waiter.

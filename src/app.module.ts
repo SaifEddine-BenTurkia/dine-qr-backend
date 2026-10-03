@@ -21,6 +21,7 @@ import { PushModule } from './push/push.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
 import { ServiceModule } from './service/service.module';
 import { SharedModule } from './shared.module';
+import { StockModule } from './stock/stock.module';
 import { StaffModule } from './staff/staff.module';
 import { TablesModule } from './tables/tables.module';
 
@@ -52,6 +53,7 @@ import { TablesModule } from './tables/tables.module';
     OrdersModule,
     PushModule,
     LoyaltyModule,
+    StockModule,
     ServiceModule,
     AdminModule,
   ],
