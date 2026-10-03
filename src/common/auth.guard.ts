@@ -11,10 +11,19 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminAccess } from './admin';
+
+/**
+ * Two kinds of accounts that never share screens or endpoints:
+ * `admin` runs the platform (emails in ADMIN_EMAILS), `restaurant` runs one
+ * restaurant. Staff roles inside a restaurant come with P0-11.
+ */
+export type AccountRole = 'admin' | 'restaurant';
 
 export interface AuthUser {
   id: string;
   email: string;
+  role: AccountRole;
 }
 
 export interface JwtPayload {
@@ -34,6 +43,14 @@ const QUERY_TOKEN = 'allowQueryToken';
  */
 export const AllowQueryToken = () => SetMetadata(QUERY_TOKEN, true);
 
+const ROLE = 'accountRole';
+
+/**
+ * Which account role may call these routes. Without it a route is for
+ * restaurant accounts only; `any` is for routes every account needs (/auth/me).
+ */
+export const ForRole = (role: AccountRole | 'any') => SetMetadata(ROLE, role);
+
 /** Lets a signed-in user whose email is not yet verified reach this route. */
 export const AllowUnverifiedEmail = () => SetMetadata(ALLOW_UNVERIFIED, true);
 
@@ -43,6 +60,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
+    private readonly admins: AdminAccess,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -92,7 +110,23 @@ export class JwtAuthGuard implements CanActivate {
       throw new ForbiddenException('Veuillez vérifier votre adresse email');
     }
 
-    req.user = { id: user.id, email: user.email };
+    const role: AccountRole = this.admins.isAdmin(user.email)
+      ? 'admin'
+      : 'restaurant';
+    const allowed =
+      this.reflector.getAllAndOverride<AccountRole | 'any'>(ROLE, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? 'restaurant';
+    if (allowed !== 'any' && allowed !== role) {
+      throw new ForbiddenException(
+        role === 'admin'
+          ? 'Compte administrateur : utilisez la console /admin'
+          : 'Accès réservé aux administrateurs',
+      );
+    }
+
+    req.user = { id: user.id, email: user.email, role };
     return true;
   }
 }

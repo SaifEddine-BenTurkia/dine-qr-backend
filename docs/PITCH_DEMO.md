@@ -5,7 +5,12 @@ screen. It also serves as the manual test of the pitch build.
 
 ## Before the pitch (about 15 minutes, once the PRs are merged)
 
-1. Log in on https://menu.arishub.site with your account (the one in `ADMIN_EMAILS`).
+1. **Admin and restaurant are now separate accounts.** Your `ADMIN_EMAILS` account only opens the
+   console (`/admin`). If your demo restaurant was created under it: log in, Console →
+   Restaurants → "Nouveau compte restaurant", pick an email you control (it does not need to
+   receive mail), a password, and "Lui confier un restaurant existant" → your restaurant. Then log
+   out and log in with that new account for the whole demo. You can show the console at the end
+   with the admin account (Activité shows the visits and calls of the demo).
 2. **Restaurant**: name, logo, colour, template "Classique" or "Élégant". Under the new sections:
    - Langues du menu: tick العربية and English.
    - WiFi: a network name and password.

@@ -1,8 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { BCRYPT_ROUNDS } from '../auth/auth.service';
+import { AdminAccess } from '../common/admin';
 import { Prisma, type Subscription } from '@prisma/client';
 import { BillingService, toRequestView } from '../billing/billing.service';
 import {
@@ -26,7 +30,73 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly billing: BillingService,
+    private readonly admins: AdminAccess,
   ) {}
+
+  /**
+   * Opens a restaurant account for an owner (verified, with the password the
+   * admin gives them). With `takeOverSlug`, a restaurant set up under an admin
+   * account moves to it, with its subscription: admins do not run restaurants.
+   */
+  async createRestaurantAccount(input: {
+    fullName: string;
+    email: string;
+    phone?: string;
+    password: string;
+    takeOverSlug?: string;
+  }) {
+    if (this.admins.isAdmin(input.email)) {
+      throw new BadRequestException(
+        "Cet email est celui d'un administrateur : choisissez-en un autre",
+      );
+    }
+    if (await this.prisma.user.count({ where: { email: input.email } })) {
+      throw new ConflictException('Un compte existe déjà avec cet email');
+    }
+    const restaurant = input.takeOverSlug
+      ? await this.prisma.restaurant.findUnique({
+          where: { slug: input.takeOverSlug },
+          select: { id: true, userId: true, user: { select: { email: true } } },
+        })
+      : null;
+    if (input.takeOverSlug) {
+      if (!restaurant) throw new NotFoundException('Restaurant introuvable');
+      if (!this.admins.isAdmin(restaurant.user.email)) {
+        throw new ConflictException(
+          'Ce restaurant appartient déjà à un compte restaurant',
+        );
+      }
+    }
+    const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: input.email,
+          fullName: input.fullName,
+          phone: input.phone || null,
+          passwordHash,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      if (restaurant) {
+        await tx.restaurant.update({
+          where: { id: restaurant.id },
+          data: { userId: created.id },
+        });
+        await tx.subscription.updateMany({
+          where: { userId: restaurant.userId },
+          data: { userId: created.id },
+        });
+      }
+      return created;
+    });
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      restaurantMoved: Boolean(restaurant),
+    };
+  }
 
   /** Platform health at a glance: accounts, live menus, revenue, what needs attention. */
   async overview() {
@@ -258,6 +328,7 @@ export class AdminService {
           email: user.email,
           phone: user.phone,
           emailVerified: user.emailVerifiedAt !== null,
+          role: this.admins.isAdmin(user.email) ? 'admin' : 'restaurant',
           createdAt: user.createdAt,
           restaurant: user.restaurant
             ? {
