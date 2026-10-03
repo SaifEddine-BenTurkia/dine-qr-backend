@@ -174,7 +174,9 @@ export class AuthService {
       isAdmin,
       // Before launch, emails only reach the allowlist: the dashboard asks
       // to confirm the address only when the link can actually arrive.
-      emailDelivery: this.recipients.allows(user.email),
+      emailDelivery:
+        Boolean(this.config.get<string>('RESEND_API_KEY')) &&
+        this.recipients.allows(user.email, 'account'),
       ...(isAdmin && {
         mfa: { enabled: user.totpEnabledAt !== null, verified: mfaVerified },
       }),

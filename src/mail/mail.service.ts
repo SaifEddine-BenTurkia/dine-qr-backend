@@ -1,13 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import { maskRecipient, RecipientPolicy } from './recipient-policy';
+import {
+  maskRecipient,
+  RecipientPolicy,
+  type MailKind,
+} from './recipient-policy';
 
 export interface PaymentRequestEmail {
   reference: string;
   months: number;
   amount: number;
   currency: string;
+}
+
+/** Resend only delivers this test sender to the Resend account's own address. */
+export const DEFAULT_SENDER = 'TableQR <onboarding@resend.dev>';
+
+interface Message {
+  html: string;
+  text: string;
 }
 
 @Injectable()
@@ -23,9 +35,7 @@ export class MailService {
   ) {
     const apiKey = config.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
-    this.from =
-      config.get<string>('RESEND_FROM_EMAIL') ??
-      'TableQR <onboarding@resend.dev>';
+    this.from = config.get<string>('RESEND_FROM_EMAIL') ?? DEFAULT_SENDER;
     this.frontendUrl = (
       config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173'
     ).replace(/\/$/, '');
@@ -38,12 +48,13 @@ export class MailService {
       'Confirmez votre adresse email — TableQR',
       layout(
         `Bonjour ${escapeHtml(fullName)},`,
-        'Merci de vous être inscrit sur TableQR. Confirmez votre adresse email pour activer votre compte.',
-        'Confirmer mon email',
+        'Bienvenue sur TableQR. Confirmez votre adresse email : elle sert à vous connecter, à retrouver votre mot de passe et à recevoir vos reçus.',
+        'Confirmer mon adresse',
         link,
-        'Ce lien expire dans 24 heures.',
+        'Ce lien expire dans 24 heures. Vous n’avez pas créé de compte ? Ignorez cet email.',
       ),
       link,
+      'account',
     );
   }
 
@@ -57,9 +68,10 @@ export class MailService {
         'Vous avez demandé à réinitialiser votre mot de passe. Si ce n’est pas vous, ignorez cet email.',
         'Choisir un nouveau mot de passe',
         link,
-        'Ce lien expire dans 1 heure.',
+        'Ce lien expire dans 1 heure et ne sert qu’une fois.',
       ),
       link,
+      'account',
     );
   }
 
@@ -173,11 +185,48 @@ export class MailService {
     );
   }
 
+  get configured() {
+    return this.resend !== null;
+  }
+
+  /**
+   * Admin check (Console → Système): sends a short email and returns what
+   * Resend answered, so a refused sender or domain is visible at once.
+   */
+  async sendTest(to: string): Promise<{ ok: boolean; detail: string }> {
+    if (!this.resend) {
+      return {
+        ok: false,
+        detail: 'RESEND_API_KEY absente : aucun email ne part.',
+      };
+    }
+    const message = layout(
+      'Bonjour,',
+      'Ceci est un email de test envoyé depuis la console TableQR. S’il est arrivé, les emails de confirmation et de mot de passe arrivent aussi.',
+      'Ouvrir TableQR',
+      this.frontendUrl,
+      `Expéditeur : ${escapeHtml(this.from)}`,
+    );
+    const { data, error } = await this.resend.emails.send({
+      from: this.from,
+      to: [to],
+      subject: 'Email de test — TableQR',
+      html: message.html,
+      text: message.text,
+    });
+    if (error) return { ok: false, detail: error.message };
+    return {
+      ok: true,
+      detail: `Accepté par Resend (${data?.id ?? 'sans identifiant'})`,
+    };
+  }
+
   private async send(
     to: string | string[],
     subject: string,
-    html: string,
+    message: Message,
     link: string,
+    kind: MailKind = 'notice',
   ) {
     const all = Array.isArray(to) ? to : [to];
     if (!this.resend) {
@@ -189,7 +238,9 @@ export class MailService {
       return;
     }
 
-    const allowed = all.filter((address) => this.recipients.allows(address));
+    const allowed = all.filter((address) =>
+      this.recipients.allows(address, kind),
+    );
     const dropped = all.filter((address) => !allowed.includes(address));
     if (dropped.length > 0) {
       this.logger.warn(
@@ -202,7 +253,8 @@ export class MailService {
       from: this.from,
       to: allowed,
       subject,
-      html,
+      html: message.html,
+      text: message.text,
     });
     if (error) {
       this.logger.error(
@@ -213,21 +265,54 @@ export class MailService {
   }
 }
 
-function layout(
+/** The same message as HTML (for mail apps) and plain text (spam filters, old phones). */
+export function layout(
   greeting: string,
   body: string,
   cta: string,
   link: string,
   footer: string,
-) {
-  return `<!doctype html><html><body style="margin:0;background:#faf7f2;font-family:Arial,sans-serif;color:#2b2b2b">
-<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
-<table width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;padding:32px">
-<tr><td style="font-size:22px;font-weight:bold;padding-bottom:16px">TableQR</td></tr>
-<tr><td style="font-size:15px;line-height:1.6">${greeting}<br><br>${body}</td></tr>
-<tr><td style="padding:24px 0"><a href="${link}" style="background:#c2410c;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:bold;display:inline-block">${cta}</a></td></tr>
-<tr><td style="font-size:12px;color:#777">${footer}<br>Lien direct : <a href="${link}" style="color:#777">${link}</a></td></tr>
+): Message {
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;background:#f7f6f4;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#2a2421">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
+<tr><td style="padding:0 4px 16px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="width:28px;height:28px;background:#b85433;border-radius:7px;color:#ffffff;font-weight:bold;font-size:13px;text-align:center;vertical-align:middle">Q</td>
+<td style="padding-left:8px;font-size:16px;font-weight:bold;color:#2a2421">TableQR</td></tr></table></td></tr>
+<tr><td style="background:#ffffff;border:1px solid #e7e4e0;border-radius:12px;padding:28px">
+<div style="font-size:15px;line-height:1.6">${greeting}<br><br>${body}</div>
+<div style="padding:24px 0 8px"><a href="${link}" style="background:#b85433;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:15px;display:inline-block">${cta}</a></div>
+<div style="font-size:12px;line-height:1.5;color:#7a716b;padding-top:16px;border-top:1px solid #efece8;margin-top:16px">${footer}<br>Le bouton ne marche pas ? Copiez ce lien : <a href="${link}" style="color:#7a716b;word-break:break-all">${link}</a></div>
+</td></tr>
+<tr><td style="padding:16px 4px;font-size:11px;color:#9a918a">TableQR · Menus digitaux pour les restaurants de Tunisie</td></tr>
 </table></td></tr></table></body></html>`;
+  const text = [
+    stripTags(greeting),
+    '',
+    stripTags(body),
+    '',
+    `${cta} : ${link}`,
+    '',
+    stripTags(footer),
+    '',
+    'TableQR · Menus digitaux pour les restaurants de Tunisie',
+  ].join('\n');
+  return { html, text };
+}
+
+function stripTags(value: string) {
+  return value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
 }
 
 function escapeHtml(value: string) {

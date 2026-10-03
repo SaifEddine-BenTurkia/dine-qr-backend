@@ -23,6 +23,27 @@ describe('RecipientPolicy', () => {
     expect(p.allows('customer@example.com')).toBe(false);
   });
 
+  it('sends account emails (confirmation, password reset) to their owner before launch', () => {
+    const p = policy({
+      NODE_ENV: 'production',
+      ADMIN_EMAILS: 'admin@example.com',
+    });
+    expect(p.accountEmailsOpen).toBe(true);
+    expect(p.allows('owner@example.com', 'account')).toBe(true);
+    expect(p.allows('owner@example.com', 'notice')).toBe(false);
+    expect(p.allows('owner@example.com')).toBe(false);
+  });
+
+  it('keeps account emails on the allowlist when ACCOUNT_EMAILS=allowlist', () => {
+    const p = policy({
+      NODE_ENV: 'production',
+      ADMIN_EMAILS: 'admin@example.com',
+      ACCOUNT_EMAILS: 'allowlist',
+    });
+    expect(p.allows('owner@example.com', 'account')).toBe(false);
+    expect(p.allows('admin@example.com', 'account')).toBe(true);
+  });
+
   it('falls back to the admins when the sandbox list is empty', () => {
     const p = policy({ ADMIN_EMAILS: 'admin@example.com' });
     expect(p.allows('admin@example.com')).toBe(true);

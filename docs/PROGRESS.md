@@ -62,7 +62,7 @@ S-03, S-04, then P1-10, P1-11, P7. Dropped: online payments, Google reviews hub,
 | O-04 | Bill and payment at the counter | done | Pay per table, discount, cash/card, Z report |
 | O-05 | Counter sales | done | Counter grid, takeaway paid at once |
 | L-01 | Loyalty program | done | Stamps, guest card, stamp at payment, reward |
-| L-02 | Google Wallet card | done | Service built and tested against fakes; live pass waits for Q10 |
+| L-02 | Google Wallet card | done | Official button, console test pass (EM-01); live pass waits for Q10 |
 | L-03 | Card designer | done | Colour, title, stamp icon, live preview |
 | S-01 | Stock per dish | done | Sold out at 0, stock held by orders |
 | S-02 | Batches and expiry | done | Sell-by time, expired stock leaves as waste |
@@ -75,6 +75,7 @@ S-03, S-04, then P1-10, P1-11, P7. Dropped: online payments, Google reviews hub,
 
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
+| EM-01 | Account emails for everyone, Google Wallet ready | done (delivery waits for Q8, Wallet for Q10) | Console checks for both |
 | UX-03 | Professional landing page, open sign-up | done | New accounts work at once; admin emails must still be confirmed |
 | UX-02 | Professional look, full-screen caisse | done | Theme, shell, order cards, "Plein écran" kept per device; frontend branch feat/ui-pro |
 | ADM-02 | Admin console security (hidden, TOTP, 8 h sessions) | done | Branch feat/admin-2fa |
