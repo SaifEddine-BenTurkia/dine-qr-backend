@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
@@ -46,7 +47,14 @@ export class AdminGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user?: AuthUser }>();
     if (req.user?.role !== 'admin' || !this.admins.isAdmin(req.user.email)) {
-      throw new ForbiddenException('Accès réservé aux administrateurs');
+      throw new NotFoundException();
+    }
+    if (!req.user.mfa) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'MFA_REQUIRED',
+        message: 'Code de vérification requis',
+      });
     }
     return true;
   }

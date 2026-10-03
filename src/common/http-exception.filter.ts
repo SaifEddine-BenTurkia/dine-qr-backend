@@ -9,7 +9,7 @@ import {
 import type { Response } from 'express';
 
 /**
- * Every error leaves the API as `{ statusCode, message }` with `message` a
+ * Every error leaves the API as `{ statusCode, message, code? }` with `message` a
  * single readable string, which is what the frontend shows in its toasts.
  * Validation errors arrive as an array and are joined; unexpected errors are
  * logged in full and answered with a generic message so internals never leak.
@@ -31,7 +31,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const message = Array.isArray(raw)
         ? raw.join('. ')
         : (raw ?? exception.message);
-      res.status(status).json({ statusCode: status, message });
+      // A machine-readable code when the app needs one (e.g. MFA_REQUIRED).
+      const code =
+        typeof body === 'object' && body && 'code' in body
+          ? (body as { code?: unknown }).code
+          : undefined;
+      res
+        .status(status)
+        .json(
+          typeof code === 'string'
+            ? { statusCode: status, message, code }
+            : { statusCode: status, message },
+        );
       return;
     }
 

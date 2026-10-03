@@ -22,6 +22,11 @@ model User {
   emailVerifiedAt  DateTime?
   // Bumped on password reset so tokens issued before it stop working.
   tokenVersion     Int       @default(0)
+  // Admin second factor (authenticator app). Secret sealed with a key derived
+  // from JWT_SECRET; lastTotpStep stops a code from being used twice.
+  totpSecret       String?
+  totpEnabledAt    DateTime?
+  lastTotpStep     Int?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

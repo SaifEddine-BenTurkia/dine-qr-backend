@@ -8,6 +8,10 @@ Plan: [PLAN.md](PLAN.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 _Updated every 5 features._
 
+**2026-10-03, ADM-02 and data reset.** PRs #15/#3 merged and live. Production data reset at the
+owner's request (only the admin login kept; backup taken first). ADM-02: the console is hidden (404)
+and protected by an authenticator code.
+
 **2026-10-03, after the pitch build.** Everything above is merged and live (owner merged; the
 Prisma 7 bump from Dependabot broke the deploy and was pinned back to 6 in backend PR #14).
 Owner request ADM-01: the admin tools moved to their own console at `/admin` (see
@@ -34,6 +38,7 @@ but merging to main was refused by Claude Code's permission system, so nothing i
 
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
+| ADM-02 | Admin console security (hidden, TOTP, 8 h sessions) | done | Branch feat/admin-2fa |
 | ADM-01 | Platform admin console at /admin | done | Activity across restaurants, system status; branch feat/admin-console |
 
 ## Phase 0: security, sandbox and foundations

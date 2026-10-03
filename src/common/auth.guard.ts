@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   SetMetadata,
   UnauthorizedException,
   createParamDecorator,
@@ -24,11 +25,14 @@ export interface AuthUser {
   id: string;
   email: string;
   role: AccountRole;
+  /** The session passed the admin second factor (authenticator code). */
+  mfa: boolean;
 }
 
 export interface JwtPayload {
   sub: string;
   ver: number;
+  mfa?: boolean;
 }
 
 type AuthedRequest = Request & { user?: AuthUser };
@@ -64,6 +68,24 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const allowed =
+      this.reflector.getAllAndOverride<AccountRole | 'any'>(ROLE, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? 'restaurant';
+    try {
+      return await this.check(context, allowed);
+    } catch (error) {
+      // Console routes do not admit they exist to anyone but an admin.
+      if (allowed === 'admin') throw new NotFoundException();
+      throw error;
+    }
+  }
+
+  private async check(
+    context: ExecutionContext,
+    allowed: AccountRole | 'any',
+  ): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
     let [scheme, token] = (req.headers.authorization ?? '').split(' ');
     const queryToken = req.query?.access_token;
@@ -113,11 +135,6 @@ export class JwtAuthGuard implements CanActivate {
     const role: AccountRole = this.admins.isAdmin(user.email)
       ? 'admin'
       : 'restaurant';
-    const allowed =
-      this.reflector.getAllAndOverride<AccountRole | 'any'>(ROLE, [
-        context.getHandler(),
-        context.getClass(),
-      ]) ?? 'restaurant';
     if (allowed !== 'any' && allowed !== role) {
       throw new ForbiddenException(
         role === 'admin'
@@ -126,7 +143,12 @@ export class JwtAuthGuard implements CanActivate {
       );
     }
 
-    req.user = { id: user.id, email: user.email, role };
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role,
+      mfa: role === 'admin' && payload.mfa === true,
+    };
     return true;
   }
 }
