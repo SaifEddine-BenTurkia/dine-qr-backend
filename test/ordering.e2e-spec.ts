@@ -8,6 +8,11 @@ import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
+import {
+  PUSH_TRANSPORT,
+  PushService,
+  type PushTarget,
+} from '../src/push/push.service';
 
 const noThrottling = {
   increment: () =>
@@ -18,6 +23,28 @@ const noThrottling = {
       timeToBlockExpire: 0,
     }),
 };
+
+// Records what would be sent to the browsers' push services.
+const pushed: {
+  endpoint: string;
+  payload: { title: string; body: string; url: string };
+}[] = [];
+const fakePush = {
+  send: (target: PushTarget, payload: string) => {
+    pushed.push({
+      endpoint: target.endpoint,
+      payload: JSON.parse(payload) as (typeof pushed)[number]['payload'],
+    });
+    // "gone" plays a device whose browser dropped the subscription.
+    return Promise.resolve({
+      statusCode: target.endpoint.endsWith('/gone') ? 410 : 201,
+    });
+  },
+};
+const device = (name: string) => ({
+  endpoint: `https://fcm.googleapis.com/fcm/send/${name}`,
+  keys: { p256dh: `BP${'A'.repeat(85)}`, auth: 'c2VjcmV0LWF1dGg' },
+});
 
 // Staff accounts (P0-11 lean) and ordering with the caisse (O-01…O-05).
 describe('Staff and ordering (e2e)', () => {
@@ -60,6 +87,8 @@ describe('Staff and ordering (e2e)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ThrottlerStorage)
       .useValue(noThrottling)
+      .overrideProvider(PUSH_TRANSPORT)
+      .useValue(fakePush)
       .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
@@ -186,6 +215,49 @@ describe('Staff and ordering (e2e)', () => {
     ).body.token;
   });
 
+  it('subscribes devices to notifications, only on real push services', async () => {
+    const key = await http().get('/push/key').set(bearer(cashier)).expect(200);
+    expect(key.body.publicKey).toMatch(/^[A-Za-z0-9_-]{80,}$/);
+    await http()
+      .post('/push/subscribe')
+      .set(bearer(cashier))
+      .send(device('cashier'))
+      .expect(200);
+    await http()
+      .post('/push/subscribe')
+      .set(bearer(waiter))
+      .send(device('waiter'))
+      .expect(200);
+    for (const name of ['owner', 'gone']) {
+      await http()
+        .post('/push/subscribe')
+        .set(bearer(owner.token))
+        .send(device(name))
+        .expect(200);
+    }
+    await http()
+      .post('/push/subscribe')
+      .set(bearer(cashier))
+      .send({ ...device('x'), endpoint: 'https://evil.example.com/hook' })
+      .expect(400);
+    await http().post('/push/subscribe').send(device('anon')).expect(401);
+    await http()
+      .post('/push/test')
+      .set(bearer(cashier))
+      .send({ endpoint: device('cashier').endpoint })
+      .expect(200);
+    expect(pushed.at(-1)).toMatchObject({
+      endpoint: device('cashier').endpoint,
+      payload: { url: '/staff/caisse' },
+    });
+    // Another restaurant cannot test or remove this device.
+    await http()
+      .post('/push/test')
+      .set(bearer(other.token))
+      .send({ endpoint: device('cashier').endpoint })
+      .expect(400);
+  });
+
   it('refuses guest orders until ordering is on, and without the table QR', async () => {
     const order = {
       sessionId: session,
@@ -275,6 +347,27 @@ describe('Staff and ordering (e2e)', () => {
       })
       .expect(409);
 
+    // The cashier's and the owner's devices ring; the waiter's does not yet.
+    await app.get(PushService).flush();
+    const rang = pushed.filter((p) =>
+      p.payload.title.startsWith('Nouvelle commande N° 1'),
+    );
+    expect(rang.map((p) => p.endpoint.split('/').pop()).sort()).toEqual([
+      'cashier',
+      'gone',
+      'owner',
+    ]);
+    expect(rang[0].payload.body).toContain('2 × Café direct');
+    expect(rang.find((p) => p.endpoint.endsWith('/owner'))?.payload.url).toBe(
+      '/dashboard/caisse',
+    );
+    // A subscription the browser dropped is forgotten.
+    expect(
+      await prisma.pushSubscription.count({
+        where: { endpoint: device('gone').endpoint },
+      }),
+    ).toBe(0);
+
     const caisse = await http().get('/orders').set(bearer(cashier)).expect(200);
     expect(caisse.body.map((o: { id: string }) => o.id)).toContain(orderId);
     const elsewhere = await http()
@@ -310,6 +403,13 @@ describe('Staff and ordering (e2e)', () => {
       .post(`/orders/${orderId}/ready`)
       .set(bearer(waiter))
       .expect(200);
+    await app.get(PushService).flush();
+    expect(
+      pushed
+        .filter((p) => p.payload.title === 'Commande N° 1 prête')
+        .map((p) => p.endpoint.split('/').pop())
+        .sort(),
+    ).toEqual(['cashier', 'owner', 'waiter']);
     const mine = await http()
       .get(`/public/menu/${owner.slug}/orders?sessionId=${session}`)
       .expect(200);

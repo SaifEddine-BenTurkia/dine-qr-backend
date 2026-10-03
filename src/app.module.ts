@@ -16,6 +16,7 @@ import { MenuModule } from './menu/menu.module';
 import { OrdersModule } from './orders/orders.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PublicMenuModule } from './public-menu/public-menu.module';
+import { PushModule } from './push/push.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
 import { ServiceModule } from './service/service.module';
 import { SharedModule } from './shared.module';
@@ -48,6 +49,7 @@ import { TablesModule } from './tables/tables.module';
     TablesModule,
     StaffModule,
     OrdersModule,
+    PushModule,
     ServiceModule,
     AdminModule,
   ],

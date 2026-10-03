@@ -127,6 +127,11 @@ export class StaffService {
           ...(revokes && { tokenVersion: { increment: 1 } }),
         },
       });
+      if (input.active === false) {
+        await this.prisma.pushSubscription.deleteMany({
+          where: { staffId: id },
+        });
+      }
       return toStaffView(member);
     } catch (error) {
       throw this.pinConflict(error);

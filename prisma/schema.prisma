@@ -87,16 +87,17 @@ model Restaurant {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categories      Category[]
-  scans           Scan[]
-  feedback        Feedback[]
-  tables          DiningTable[]
-  serviceRequests ServiceRequest[]
-  events          Event[]
-  staff           StaffMember[]
-  orders          Order[]
-  bills           Bill[]
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories        Category[]
+  scans             Scan[]
+  feedback          Feedback[]
+  tables            DiningTable[]
+  serviceRequests   ServiceRequest[]
+  events            Event[]
+  staff             StaffMember[]
+  orders            Order[]
+  bills             Bill[]
+  pushSubscriptions PushSubscription[]
 }
 
 // A physical table with its own QR code (P1-01). The token is random and
@@ -336,7 +337,8 @@ model StaffMember {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant        Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  pushSubscriptions PushSubscription[]
 
   @@unique([restaurantId, pinHash])
   @@index([restaurantId])
@@ -427,4 +429,31 @@ model Bill {
   orders     Order[]
 
   @@index([restaurantId, paidAt])
+}
+
+// Settings the server generates and must keep across restarts (the web push
+// keys). Secret parts are sealed with a key derived from JWT_SECRET.
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// A device that asked for notifications (O-06): the owner's (role OWNER) or a
+// staff member's (their job when the device subscribed).
+model PushSubscription {
+  id           String    @id @default(uuid())
+  restaurantId String
+  staffId      String?
+  role         String
+  endpoint     String    @unique
+  p256dh       String
+  auth         String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  staff      StaffMember? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, role])
 }

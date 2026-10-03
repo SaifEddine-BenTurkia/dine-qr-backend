@@ -12,6 +12,7 @@ import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
 import { toCategoryView, toDishView } from '../menu/menu.views';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { toRestaurantView } from '../restaurant/restaurant.service';
 import { ServiceHub } from '../service/service-hub';
 import {
@@ -57,6 +58,7 @@ export class PublicMenuService {
     private readonly requests: ServiceRequestsService,
     private readonly hub: ServiceHub,
     private readonly entitlements: EntitlementsService,
+    private readonly push: PushService,
     config: ConfigService,
   ) {
     this.salt = config.get<string>('SCAN_HASH_SALT') ?? 'development-salt';
@@ -236,6 +238,13 @@ export class PublicMenuService {
         rating: input.rating,
         table: table?.label ?? null,
         comment: feedback.comment ? feedback.comment.slice(0, 140) : null,
+      });
+      this.push.notify(restaurantId, ['OWNER', 'MANAGER'], {
+        title: `Avis ${input.rating}/5${table ? ` · table ${table.label}` : ''}`,
+        body: feedback.comment
+          ? feedback.comment.slice(0, 120)
+          : 'Passez voir ce client avant qu’il parte.',
+        tag: `feedback-${feedback.id}`,
       });
     }
     return { success: true, id: feedback.id };

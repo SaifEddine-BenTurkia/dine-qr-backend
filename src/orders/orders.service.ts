@@ -14,8 +14,9 @@ import {
 } from '../billing/entitlements.service';
 import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
-import { fromMillimes, sumMillimes } from '../common/money';
+import { formatDinars, fromMillimes, sumMillimes } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
 import { ServiceHub } from '../service/service-hub';
 
@@ -40,6 +41,12 @@ export function serviceDay(now = new Date()) {
   if (start > now) start.setUTCDate(start.getUTCDate() - 1);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { key: start.toISOString().slice(0, 10), start, end };
+}
+
+/** "2 × Café, 1 × Brik" for notifications. */
+function summary(items: { quantity: number; name: string }[]) {
+  const text = items.map((i) => `${i.quantity} × ${i.name}`).join(', ');
+  return text.length > 90 ? `${text.slice(0, 89)}…` : text;
 }
 
 const orderInclude = {
@@ -88,6 +95,7 @@ export class OrdersService {
     private readonly access: RestaurantAccessService,
     private readonly hub: ServiceHub,
     private readonly entitlements: EntitlementsService,
+    private readonly push: PushService,
   ) {}
 
   /** The caisse belongs to Premium; counter sales and closing to Business. */
@@ -172,6 +180,12 @@ export class OrdersService {
       id: order.id,
       number: order.number,
       table: table.label,
+    });
+    this.push.notify(restaurant.id, ['OWNER', 'MANAGER', 'CASHIER'], {
+      title: `Nouvelle commande N° ${order.number} · table ${table.label}`,
+      body: `${summary(order.items)} · ${formatDinars(order.totalMillimes)}`,
+      tag: `order-${order.id}`,
+      sticky: true,
     });
     return order;
   }
@@ -298,6 +312,20 @@ export class OrdersService {
       id,
       status: next,
     });
+    if (next === 'READY') {
+      // Whoever serves takes it to the table.
+      this.push.notify(
+        restaurantId,
+        ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'],
+        {
+          title: `Commande N° ${order.number} prête`,
+          body: order.table
+            ? `À servir table ${order.table.label} · ${summary(toOrderView(order).items)}`
+            : `Comptoir · ${summary(toOrderView(order).items)}`,
+          tag: `order-${order.id}`,
+        },
+      );
+    }
     return toOrderView(order);
   }
 

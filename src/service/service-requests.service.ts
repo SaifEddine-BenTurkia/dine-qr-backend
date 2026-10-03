@@ -12,6 +12,7 @@ import {
   type ServiceRequest,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
 import { ServiceHub } from './service-hub';
 
@@ -48,6 +49,7 @@ export class ServiceRequestsService {
     private readonly prisma: PrismaService,
     private readonly access: RestaurantAccessService,
     private readonly hub: ServiceHub,
+    private readonly push: PushService,
   ) {}
 
   /**
@@ -112,6 +114,19 @@ export class ServiceRequestsService {
       id: request.id,
       type,
       table: table.label,
+    });
+    this.push.notify(restaurantId, ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'], {
+      title:
+        type === 'WAITER'
+          ? `Table ${table.label} appelle`
+          : `Table ${table.label} demande l'addition`,
+      body:
+        type === 'WAITER'
+          ? 'Un client demande un serveur.'
+          : type === 'BILL_CARD'
+            ? 'Paiement par carte.'
+            : 'Paiement en espèces.',
+      tag: `call-${request.id}`,
     });
     return toRequestView(request);
   }
