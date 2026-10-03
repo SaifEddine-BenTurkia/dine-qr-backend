@@ -29,7 +29,7 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 | Language | TypeScript, React 19 | TypeScript, Node 22 (Docker image node 26) |
 | Framework | Vite 7 SPA, TanStack Router (file routes) and Query, Tailwind 4, shadcn/ui | NestJS 11 (Express) |
 | Data | `src/lib/api.ts` typed fetch client | Prisma 6 on PostgreSQL 17 |
-| Tests | Lint and type check (Vitest and Playwright arrive with P0-02) | Jest unit and e2e (supertest, real Postgres) |
+| Tests | Vitest + Testing Library; Playwright phone smoke tests against a mocked API | Jest unit and e2e (supertest, real Postgres); `npm run seed` for local demo data |
 | Package manager | npm | npm |
 
 ## 3. Accounts and roles

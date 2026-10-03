@@ -1,22 +1,32 @@
 version: 2
+# One grouped pull request per week for minor and patch updates, so updates do
+# not conflict with each other. Major versions (Prisma 7, Node 26, NestJS 12…)
+# are upgraded on purpose in a planned branch: Prisma 7 broke the deploy once.
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     groups:
-      nestjs:
-        patterns: ["@nestjs/*"]
-      prisma:
-        patterns: ["prisma", "@prisma/*"]
-    open-pull-requests-limit: 5
+      dependencies:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    open-pull-requests-limit: 3
 
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

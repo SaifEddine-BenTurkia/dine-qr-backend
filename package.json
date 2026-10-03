@@ -21,6 +21,7 @@
     "env:check": "ts-node --transpile-only scripts/env-check.ts",
     "env:init": "ts-node --transpile-only scripts/env-init.ts",
     "smoke": "ts-node --transpile-only scripts/smoke.ts",
+    "seed": "ts-node --transpile-only scripts/seed.ts",
     "smoke:public": "ts-node --transpile-only scripts/smoke-public.ts",
     "secrets:scan": "node scripts/secrets-scan.mjs"
   },
