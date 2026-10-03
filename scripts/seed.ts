@@ -12,7 +12,7 @@
  */
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { loadEnv } from './load-env';
 
 const DOMAIN = '@seed.tableqr.test';
@@ -443,10 +443,15 @@ async function main() {
         enabledLocales: loc.locales,
         wifiSsid: loc.wifi?.ssid,
         wifiPassword: loc.wifi?.password,
+        orderingEnabled: true,
+        receiptAddress: '12 rue de Marseille, Tunis',
+        receiptPhone: '71 000 000',
+        taxId: '1234567/A/M/000',
       },
     });
 
     const dishIds: string[] = [];
+    const dishRows: { id: string; name: string; priceMillimes: number }[] = [];
     for (const [cIndex, category] of loc.menu.entries()) {
       const created = await prisma.category.create({
         data: {
@@ -470,6 +475,7 @@ async function main() {
           },
         });
         dishIds.push(row.id);
+        dishRows.push(row);
       }
     }
 
@@ -575,6 +581,168 @@ async function main() {
       })),
     });
 
+    // Team: PINs 1234 (caisse), 5678 (serveur), 4321 (responsable).
+    const pinHash = (pin: string) =>
+      createHmac('sha256', env.JWT_SECRET ?? '')
+        .update(`staff-pin:${restaurant.id}:${pin}`)
+        .digest('base64url');
+    await prisma.staffMember.createMany({
+      data: [
+        { name: 'Sami', role: 'CASHIER', pin: '1234' },
+        { name: 'Nour', role: 'WAITER', pin: '5678' },
+        { name: 'Mona', role: 'MANAGER', pin: '4321' },
+      ].map(({ pin, ...member }) => ({
+        ...member,
+        role: member.role as 'CASHIER' | 'WAITER' | 'MANAGER',
+        restaurantId: restaurant.id,
+        pinHash: pinHash(pin),
+      })),
+    });
+
+    // Two weeks of paid orders: the first dishes sell most, the last one never
+    // (so the anti-waste screen has a slow seller to point at).
+    const sellable = dishRows.slice(0, -1);
+    const weights = sellable.map((_, i) => 1 / (i + 1.5));
+    const weightSum = weights.reduce((a, b) => a + b, 0);
+    const pickDish = () => {
+      let r = random() * weightSum;
+      for (let i = 0; i < sellable.length; i++) {
+        r -= weights[i];
+        if (r <= 0) return sellable[i];
+      }
+      return sellable[0];
+    };
+    const orders: Prisma.OrderCreateManyInput[] = [];
+    const items: Prisma.OrderItemCreateManyInput[] = [];
+    const bills: Prisma.BillCreateManyInput[] = [];
+    const perDay = Math.max(6, Math.round(loc.activity / 5));
+    for (let d = 13; d >= 0; d--) {
+      for (let n = 1; n <= perDay; n++) {
+        const hour = [8, 9, 10, 12, 13, 16, 17, 19, 20, 21][
+          Math.floor(random() * 10)
+        ];
+        const at = new Date(now - d * DAY);
+        at.setUTCHours(hour - 1, Math.floor(random() * 60), 0, 0);
+        if (at.getTime() > now) continue;
+        const orderId = randomUUID();
+        const billId = randomUUID();
+        const lineCount = 1 + Math.floor(random() * 3);
+        let total = 0;
+        for (let k = 0; k < lineCount; k++) {
+          const dish = pickDish();
+          const quantity = 1 + Math.floor(random() * 2);
+          total += dish.priceMillimes * quantity;
+          items.push({
+            orderId,
+            dishId: dish.id,
+            name: dish.name,
+            unitPriceMillimes: dish.priceMillimes,
+            quantity,
+            totalMillimes: dish.priceMillimes * quantity,
+            position: k,
+          });
+        }
+        const table = tables[Math.floor(random() * tables.length)];
+        bills.push({
+          id: billId,
+          restaurantId: restaurant.id,
+          number: n,
+          tableId: table.id,
+          subtotalMillimes: total,
+          totalMillimes: total,
+          method: random() < 0.75 ? 'CASH' : 'CARD',
+          paidAt: new Date(at.getTime() + 25 * 60_000),
+          cashierName: 'Sami',
+        });
+        orders.push({
+          id: orderId,
+          restaurantId: restaurant.id,
+          number: n,
+          source: random() < 0.7 ? 'TABLE' : 'COUNTER',
+          tableId: table.id,
+          status: 'SERVED',
+          totalMillimes: total,
+          createdAt: at,
+          acceptedAt: new Date(at.getTime() + 60_000),
+          servedAt: new Date(at.getTime() + 12 * 60_000),
+          billId,
+        });
+      }
+    }
+    await prisma.bill.createMany({ data: bills });
+    await prisma.order.createMany({ data: orders });
+    await prisma.orderItem.createMany({ data: items });
+
+    // Loyalty: the program and a few regulars.
+    await prisma.loyaltyProgram.create({
+      data: {
+        restaurantId: restaurant.id,
+        enabled: true,
+        stampsRequired: 9,
+        rewardText: '1 café offert',
+        cardTitle: 'Carte fidélité',
+        backgroundColor: loc.color,
+      },
+    });
+    const regulars: [string, string, number][] = [
+      ['Amine', '20123456', 4],
+      ['Leila', '98765432', 8],
+      ['Karim', '55111222', 9],
+      ['Sara', '22333444', 1],
+      ['Youssef', '50600700', 12],
+    ];
+    await prisma.loyaltyCard.createMany({
+      data: regulars.map(([name, phone, stamps], k) => ({
+        restaurantId: restaurant.id,
+        code: randomBytes(9).toString('base64url'),
+        name,
+        phone,
+        stamps,
+        totalStamps: stamps + 9 * (k % 2),
+        rewardsRedeemed: k % 2,
+        createdAt: new Date(now - (20 - k * 3) * DAY),
+        lastStampAt: new Date(now - k * DAY),
+      })),
+    });
+
+    // Stock: one dish to sell before tonight, one for tomorrow, one without a date.
+    const endOfToday = new Date(now);
+    endOfToday.setUTCHours(4, 0, 0, 0);
+    if (endOfToday.getTime() <= now)
+      endOfToday.setTime(endOfToday.getTime() + DAY);
+    const stocked: [number, number, Date | null][] = [
+      [0, 40, null],
+      [2, 14, endOfToday],
+      [3, 6, new Date(endOfToday.getTime() + DAY)],
+    ];
+    for (const [index, quantity, expiresAt] of stocked) {
+      const dish = dishRows[index];
+      if (!dish) continue;
+      const batch = await prisma.stockBatch.create({
+        data: {
+          restaurantId: restaurant.id,
+          dishId: dish.id,
+          quantity,
+          remaining: quantity,
+          expiresAt,
+        },
+      });
+      await prisma.stockMovement.create({
+        data: {
+          restaurantId: restaurant.id,
+          dishId: dish.id,
+          batchId: batch.id,
+          type: 'RESTOCK',
+          quantity,
+          actor: 'Mona',
+        },
+      });
+      await prisma.dish.update({
+        where: { id: dish.id },
+        data: { trackStock: true, stockQty: quantity },
+      });
+    }
+
     console.log(
       `${loc.restaurant.padEnd(34)} ${loc.key}${DOMAIN}  /m/${loc.slug}  ${tables.length} tables, ${dishIds.length} dishes, ${loc.locales.join('/')}`,
     );
@@ -584,6 +752,9 @@ async function main() {
       (removed.count
         ? `  (replaced ${removed.count} older seed accounts)`
         : ''),
+  );
+  console.log(
+    'Team app (/staff): restaurant code = the slug above; PIN 1234 (caisse), 5678 (serveur), 4321 (responsable).',
   );
   console.log(
     'Admin console: log in with an email listed in ADMIN_EMAILS of your local env.',
