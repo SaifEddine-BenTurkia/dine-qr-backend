@@ -407,6 +407,22 @@ export class AdminService {
     return { status: 'trialing', trialEndsAt };
   }
 
+  async verifyEmail(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { emailVerifiedAt: true },
+    });
+    if (!user) throw new NotFoundException('Compte introuvable');
+    const verifiedAt = user.emailVerifiedAt ?? new Date();
+    if (!user.emailVerifiedAt) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { emailVerifiedAt: verifiedAt },
+      });
+    }
+    return { emailVerified: true, verifiedAt };
+  }
+
   /** Takes the public menu offline until the account pays or is given a trial. */
   async suspend(userId: string) {
     const user = await this.prisma.user.findUnique({
