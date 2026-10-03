@@ -66,6 +66,13 @@ merged, and Claude Code cannot merge (Q4).
    about 2 minutes.
 3. Tell me, and I check the live site (health, guest menu, service board) and fix anything.
 
+### Q7. Replace the production test restaurants with demo data? (2026-10-03)
+**Why:** the plan (P0-02) asks to replace the 2 test restaurants on production with the 3 demo
+locations. That deletes data on the server, which needs your approval.
+**Options:** (a) keep production as it is and use the demo data only locally (recommended until
+real customers arrive: your pitch restaurant is there); (b) tell me which production restaurants
+may be deleted, and I will prepare a one-off script for you to run.
+
 ## Assumptions made (say if one is wrong)
 
 - **A1 (P0-00).** A server without `APP_ENV` runs as `prelaunch`: sandbox rules apply and emails go

@@ -11,6 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import {
   AllowUnverifiedEmail,
   CurrentUser,
+  ForRole,
   JwtAuthGuard,
   type AuthUser,
 } from '../common/auth.guard';
@@ -45,6 +46,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ForRole('any')
   @AllowUnverifiedEmail()
   @Get('me')
   me(@CurrentUser() user: AuthUser) {

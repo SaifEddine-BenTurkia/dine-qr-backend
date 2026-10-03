@@ -268,7 +268,10 @@ describe('TableQR API (e2e)', () => {
     });
     expect(created.body.reference).toMatch(/^TQ-[A-Z2-9]{6}$/);
     expect(mail.sent).toEqual(
-      expect.arrayContaining([`admins:${ADMIN_EMAIL}`, `received:${email}`]),
+      expect.arrayContaining([
+        expect.stringContaining(`admins:${ADMIN_EMAIL}`),
+        `received:${email}`,
+      ]),
     );
 
     // One open request at a time; months must be an offered plan.

@@ -8,6 +8,11 @@ Plan: [PLAN.md](PLAN.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 _Updated every 5 features._
 
+**2026-10-03, after the pitch build.** Everything above is merged and live (owner merged; the
+Prisma 7 bump from Dependabot broke the deploy and was pinned back to 6 in backend PR #14).
+Owner request ADM-01: the admin tools moved to their own console at `/admin` (see
+features/ADM-01-admin-console.md).
+
 **2026-10-03, pitch build.** The owner asked for a pitch-ready product by 2026-10-04, so plan order
 was changed on purpose: after P0-00, the guest and staff features of Phase 1 that show value in a
 demo were built first, on branch `feat/P1-guest-service` (stacked on P0-00) in both repos.
@@ -25,6 +30,12 @@ demo were built first, on branch `feat/P1-guest-service` (stacked on P0-00) in b
 **2026-10-02, stopped after P0-00.** P0-00 is built and green in CI (backend PR #12, frontend PR #1),
 but merging to main was refused by Claude Code's permission system, so nothing is deployed yet.
 
+## Owner requests outside the plan
+
+| ID | Feature | Status | Note |
+| --- | --- | --- | --- |
+| ADM-01 | Platform admin console at /admin | done | Activity across restaurants, system status; branch feat/admin-console |
+
 ## Phase 0: security, sandbox and foundations
 
 Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-07, P0-08, P0-09, P0-10.
@@ -32,8 +43,8 @@ Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
 | P0-00 | Security fixes and sandbox guards | blocked-on-owner | Built, CI green (PRs #12 and #1). Waits for merge (Q4), key rotation (Q1), remote decision (Q2); deploy:env not built (Q3); CSP still report-only until deployed |
-| P0-01 | Architecture doc | todo | |
-| P0-02 | Tests, CI and seed data | todo | |
+| P0-01 | Architecture doc | done | docs/ARCHITECTURE.md; in PR #15 with ADM-01 |
+| P0-02 | Tests, CI and seed data | done | Vitest, Playwright smoke, `npm run seed`, grouped Dependabot; prod test data replacement waits for Q7 |
 | P0-12 | Server hardening and reliability | todo | |
 | P0-13 | Final domain | todo | |
 | P0-04 | Money in millimes | todo | |

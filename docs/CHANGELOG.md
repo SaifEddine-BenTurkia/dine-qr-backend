@@ -2,6 +2,20 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## ADM-01 Platform admin console (2026-10-03)
+
+- The platform owner's tools moved out of the restaurant dashboard into their own console at
+  `/admin`: overview, activity across all restaurants, restaurants, payments, system status.
+- Two account roles: admin (console only) and restaurant (dashboard only), enforced on every
+  endpoint. Console → Restaurants → "Nouveau compte restaurant" creates an owner account and can
+  move a restaurant off an admin account.
+- Prisma pinned back to 6 (Dependabot moved it to 7, which blocked the deploy).
+
+**Test manually:** log in with an `ADMIN_EMAILS` account → you land on `/admin`. Open Activité
+(switch 24 h / 7 j / 30 j), Restaurants, Paiements, Système. Log in as a normal owner and open
+`/admin`: you are sent back to `/dashboard`. As admin, open `/dashboard`: you are sent to
+`/admin`. Create a restaurant account and log in with it.
+
 ## Pitch build: P1-01, P1-03, P1-04, P1-05, P1-06, P1-08, P1-09, P1-12 (2026-10-03)
 
 - Tables with their own QR codes (bulk add, zones, PNG/SVG, print all, rotate a QR).

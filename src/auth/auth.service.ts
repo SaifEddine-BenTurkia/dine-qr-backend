@@ -16,7 +16,7 @@ import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { LoginDto, RegisterDto } from './auth.dto';
 
-const BCRYPT_ROUNDS = 12;
+export const BCRYPT_ROUNDS = 12;
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
 
@@ -93,7 +93,12 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException();
     // Only here, not in login/register: the dashboard reads it from /auth/me.
-    return { ...toPublicUser(user), isAdmin: this.admins.isAdmin(user.email) };
+    const isAdmin = this.admins.isAdmin(user.email);
+    return {
+      ...toPublicUser(user),
+      role: isAdmin ? 'admin' : 'restaurant',
+      isAdmin,
+    };
   }
 
   async verifyEmail(token: string) {

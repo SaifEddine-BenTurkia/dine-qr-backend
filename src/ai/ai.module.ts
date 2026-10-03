@@ -6,5 +6,6 @@ import { MenuTranslationService } from './menu-translation.service';
 @Module({
   controllers: [AiController],
   providers: [AiService, MenuTranslationService],
+  exports: [AiService],
 })
 export class AiModule {}

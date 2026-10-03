@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsEmail,
   IsIn,
   IsInt,
   IsNumber,
@@ -19,11 +20,18 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import { BillingService } from '../billing/billing.service';
 import type { EffectiveStatus } from '../billing/subscription-status';
 import { AdminGuard } from '../common/admin';
-import { CurrentUser, JwtAuthGuard, type AuthUser } from '../common/auth.guard';
+import {
+  CurrentUser,
+  ForRole,
+  JwtAuthGuard,
+  type AuthUser,
+} from '../common/auth.guard';
+import { AdminActivityService } from './admin-activity.service';
 import { AdminService } from './admin.service';
 
 const STATUSES: EffectiveStatus[] = [
@@ -67,6 +75,46 @@ class RecordPaymentDto {
   adminNote?: string;
 }
 
+class ActivityQuery {
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([1, 7, 30, 90])
+  days: number = 7;
+}
+
+class CreateAccountDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  fullName: string;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsEmail()
+  @MaxLength(254)
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  password: string;
+
+  /** Moves this restaurant, owned today by an admin account, to the new account. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  takeOverSlug?: string;
+}
+
 class ExtendTrialDto {
   @Type(() => Number)
   @IsInt()
@@ -75,12 +123,14 @@ class ExtendTrialDto {
   days: number;
 }
 
+@ForRole('admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
 @Controller('admin')
 export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly billing: BillingService,
+    private readonly activityService: AdminActivityService,
   ) {}
 
   @Get('overview')
@@ -88,9 +138,24 @@ export class AdminController {
     return this.admin.overview();
   }
 
+  @Get('activity')
+  activity(@Query() query: ActivityQuery) {
+    return this.activityService.activity(query.days);
+  }
+
+  @Get('system')
+  system() {
+    return this.activityService.system();
+  }
+
   @Get('accounts')
   accounts(@Query() query: AccountsQuery) {
     return this.admin.accounts(query.search, query.status);
+  }
+
+  @Post('accounts')
+  createAccount(@Body() body: CreateAccountDto) {
+    return this.admin.createRestaurantAccount(body);
   }
 
   @Get('accounts/:userId/payments')

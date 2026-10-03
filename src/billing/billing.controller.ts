@@ -23,7 +23,12 @@ import {
   Min,
 } from 'class-validator';
 import { AdminGuard } from '../common/admin';
-import { CurrentUser, JwtAuthGuard, type AuthUser } from '../common/auth.guard';
+import {
+  CurrentUser,
+  ForRole,
+  JwtAuthGuard,
+  type AuthUser,
+} from '../common/auth.guard';
 import { BillingService } from './billing.service';
 
 const trim = ({ value }: { value: unknown }) =>
@@ -114,6 +119,7 @@ export class SubscriptionController {
   }
 }
 
+@ForRole('admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
 @Controller('admin/payment-requests')
 export class AdminPaymentsController {
