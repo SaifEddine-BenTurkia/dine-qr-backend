@@ -15,6 +15,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { AdminAccess } from '../common/admin';
 import type { JwtPayload } from '../common/auth.guard';
 import { MailService } from '../mail/mail.service';
+import { RecipientPolicy } from '../mail/recipient-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import type { LoginDto, RegisterDto } from './auth.dto';
 import {
@@ -58,6 +59,7 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly admins: AdminAccess,
     private readonly config: ConfigService,
+    private readonly recipients: RecipientPolicy,
   ) {}
 
   private get sealKey() {
@@ -170,6 +172,9 @@ export class AuthService {
       ...toPublicUser(user),
       role: isAdmin ? 'admin' : 'restaurant',
       isAdmin,
+      // Before launch, emails only reach the allowlist: the dashboard asks
+      // to confirm the address only when the link can actually arrive.
+      emailDelivery: this.recipients.allows(user.email),
       ...(isAdmin && {
         mfa: { enabled: user.totpEnabledAt !== null, verified: mfaVerified },
       }),
