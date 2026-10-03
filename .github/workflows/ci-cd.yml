@@ -96,7 +96,7 @@ jobs:
       # Images are tagged with the commit SHA: what runs in production is
       # always traceable to one commit, and rolling back is redeploying a tag.
       - name: API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: production
@@ -112,7 +112,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Migration image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: migration
