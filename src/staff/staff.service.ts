@@ -215,7 +215,13 @@ export class StaffService {
         },
       },
     });
-    return { ...toStaffView(member), restaurant: member.restaurant };
+    return {
+      ...toStaffView(member),
+      restaurant: member.restaurant,
+      // What the restaurant's pack includes, so the staff app shows the
+      // right screens.
+      entitlements: await this.entitlements.of(member.restaurantId),
+    };
   }
 
   private windowed(restaurantId: string) {
