@@ -43,7 +43,7 @@ Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
 | P0-00 | Security fixes and sandbox guards | blocked-on-owner | Built, CI green (PRs #12 and #1). Waits for merge (Q4), key rotation (Q1), remote decision (Q2); deploy:env not built (Q3); CSP still report-only until deployed |
-| P0-01 | Architecture doc | todo | |
+| P0-01 | Architecture doc | done | docs/ARCHITECTURE.md; branch feat/P0-01-architecture (stacked on feat/admin-console) |
 | P0-02 | Tests, CI and seed data | todo | |
 | P0-12 | Server hardening and reliability | todo | |
 | P0-13 | Final domain | todo | |
