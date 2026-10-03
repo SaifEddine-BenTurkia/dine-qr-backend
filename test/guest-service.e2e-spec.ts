@@ -424,4 +424,33 @@ describe('Guest service (e2e)', () => {
       0,
     );
   });
+
+  it('lets the admin validate an email the owner never received', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({
+      where: { email: 'svc-admin@example.com' },
+    });
+    const asAdmin = {
+      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0, mfa: true })}`,
+    };
+    const pending = await prisma.user.create({
+      data: {
+        email: `svc-unverified-${randomUUID()}@example.com`,
+        passwordHash: 'not-used',
+        fullName: 'Unverified owner',
+      },
+    });
+    owners.push({ email: pending.email, token: '', slug: '' });
+    await http()
+      .post(`/admin/accounts/${pending.id}/verify-email`)
+      .set(as(0))
+      .expect(404);
+    await http()
+      .post(`/admin/accounts/${pending.id}/verify-email`)
+      .set(asAdmin)
+      .expect(200);
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: pending.id },
+    });
+    expect(after.emailVerifiedAt).not.toBeNull();
+  });
 });

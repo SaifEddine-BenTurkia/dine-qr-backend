@@ -16,7 +16,10 @@ const KINDS = [
   ['Resend key', /\bre_[A-Za-z0-9]{6,}_[A-Za-z0-9_]{10,}/],
   ['Stripe-style live key', /\b(sk|pk|rk)_live_[A-Za-z0-9]{10,}/],
   ['AWS access key', /\bAKIA[0-9A-Z]{16}\b/],
-  ['GitHub token', /\b(ghp|gho|ghs|ghu)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}/],
+  [
+    'GitHub token',
+    /\b(ghp|gho|ghs|ghu)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}/,
+  ],
   ['Google API key', /\bAIza[0-9A-Za-z_-]{35}\b/],
   ['Slack token', /\bxox[abprs]-[A-Za-z0-9-]{10,}/],
   ['Private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
@@ -28,7 +31,8 @@ const KINDS = [
   ],
 ];
 
-const SKIP = /(^|\/)(node_modules|\.git)\/|package-lock\.json$|\.(png|jpe?g|gif|webp|ico|woff2?|ttf|pdf|zip)$/i;
+const SKIP =
+  /(^|\/)(node_modules|\.git)\/|package-lock\.json$|\.(png|jpe?g|gif|webp|ico|woff2?|ttf|pdf|zip)$/i;
 
 function walk(dir) {
   const out = [];
@@ -64,5 +68,7 @@ for (const file of [...new Set([...tracked, ...extra])]) {
   });
 }
 
-console.log(found ? `FAIL: ${found} possible secret(s)` : 'OK: no secrets found');
+console.log(
+  found ? `FAIL: ${found} possible secret(s)` : 'OK: no secrets found',
+);
 process.exit(found ? 1 : 0);

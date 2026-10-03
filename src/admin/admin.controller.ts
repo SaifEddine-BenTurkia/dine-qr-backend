@@ -182,6 +182,13 @@ export class AdminController {
     return this.admin.extendTrial(userId, body.days);
   }
 
+  /** For owners who cannot receive the link (prelaunch email allowlist, typos). */
+  @HttpCode(200)
+  @Post('accounts/:userId/verify-email')
+  verifyEmail(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.admin.verifyEmail(userId);
+  }
+
   @HttpCode(200)
   @Post('accounts/:userId/suspend')
   suspend(@Param('userId', ParseUUIDPipe) userId: string) {

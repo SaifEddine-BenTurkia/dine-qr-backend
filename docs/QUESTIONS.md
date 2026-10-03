@@ -73,6 +73,15 @@ locations. That deletes data on the server, which needs your approval.
 real customers arrive: your pitch restaurant is there); (b) tell me which production restaurants
 may be deleted, and I will prepare a one-off script for you to run.
 
+### Q8. When should emails go to every restaurant owner? (2026-10-03)
+**Why:** before launch the server only emails the addresses in `ADMIN_EMAILS` (assumption A1), so
+owners who register do not get their verification link. Workaround now: Console → Restaurants →
+account → "Valider l'email".
+**To open emails to everyone (your decision, on the server):** first rotate the Resend key (Q1),
+then in the server's TableQR env file (in `/opt/tableqr`) either set `APP_ENV=production` (live
+mode: only after the first paying customer) or keep prelaunch and list the owners' addresses in
+`SANDBOX_ALLOWED_RECIPIENTS` (comma-separated); then redeploy (re-run the last CI/CD run on main).
+
 ## Assumptions made (say if one is wrong)
 
 - **A1 (P0-00).** A server without `APP_ENV` runs as `prelaunch`: sandbox rules apply and emails go
