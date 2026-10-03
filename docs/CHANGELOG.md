@@ -2,6 +2,17 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## ADM-02 Admin console security (2026-10-03)
+
+- `/admin` is a 404 for everyone but a signed-in admin (browser and API).
+- Admins confirm each session with a 6-digit code from an authenticator app; sessions last 8 hours.
+- Production data reset on 2026-10-03 at the owner's request (backup
+  `/opt/tableqr/backups/pre-reset-20261003T082225Z.dump`); only the admin login was kept.
+
+**Test manually:** open https://menu.arishub.site/admin signed out: "Page introuvable". Log in with
+the admin email, scan the QR with Google Authenticator, enter the code: console. Log in as a
+restaurant account and open /admin: "Page introuvable".
+
 ## ADM-01 Platform admin console (2026-10-03)
 
 - The platform owner's tools moved out of the restaurant dashboard into their own console at

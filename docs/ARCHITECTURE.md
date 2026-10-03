@@ -3,7 +3,7 @@
 How TableQR is built and deployed today. Keep it current: update the sections a feature touches in
 the same pull request. `DISCOVERY.md` is the dated audit of 2026-10-02 and is not updated.
 
-Last updated: 2026-10-03 (ADM-01 roles and admin console).
+Last updated: 2026-10-03 (ADM-02 admin security).
 
 ## 1. Overview
 
@@ -43,6 +43,9 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 - `JwtAuthGuard` (`src/common/auth.guard.ts`) reloads the user on every request (token version for
   revocation, email verified), computes the role and enforces `@ForRole`. `AdminGuard` checks again
   on admin controllers.
+- Admin console security (ADM-02): admin routes answer 404 to everyone but an admin; admins need
+  a TOTP code after the password (15-minute pending session, then 8-hour session with `mfa: true`
+  in the token, checked by `AdminGuard`).
 - The frontend redirects by role (`roleOf()` in `src/lib/auth-context.tsx`): `/dashboard` sends
   admins to `/admin`, `/admin` sends restaurant accounts to `/dashboard`.
 - Admins create restaurant accounts in the console (`POST /admin/accounts`).
@@ -88,7 +91,7 @@ container today; with several, `ServiceHub` becomes a PostgreSQL LISTEN/NOTIFY b
 | `Scan` | Menu opens with a salted visitor hash (to be replaced by `Event`, P0-06) |
 | `Subscription`, `PaymentRequest` | Trial and cash payments |
 
-Migrations: `init`, `manual_cash_payments`, `menu_template`, `guest_service`, `ai_locales`.
+Migrations: `init`, `manual_cash_payments`, `menu_template`, `guest_service`, `ai_locales`, `admin_totp`.
 New migrations must be additive or come with a backfill; `deploy.sh` backs up before migrating.
 
 ## 6. Frontend layout (`dine-qr-style/src/`)
