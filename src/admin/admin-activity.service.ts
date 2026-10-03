@@ -202,8 +202,10 @@ export class AdminActivityService {
         feedback: feedbackTotal,
         avgRating: feedbackTotal
           ? round1(
-              feedback.reduce((t, f) => t + (f._avg.rating ?? 0) * f._count, 0) /
-                feedbackTotal,
+              feedback.reduce(
+                (t, f) => t + (f._avg.rating ?? 0) * f._count,
+                0,
+              ) / feedbackTotal,
             )
           : null,
         lowRatings,
