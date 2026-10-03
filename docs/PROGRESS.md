@@ -75,6 +75,7 @@ S-03, S-04, then P1-10, P1-11, P7. Dropped: online payments, Google reviews hub,
 
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
+| UX-02 | Professional look, full-screen caisse | done | Theme, shell, order cards, "Plein écran" kept per device; frontend branch feat/ui-pro |
 | ADM-02 | Admin console security (hidden, TOTP, 8 h sessions) | done | Branch feat/admin-2fa |
 | ADM-01 | Platform admin console at /admin | done | Activity across restaurants, system status; branch feat/admin-console |
 

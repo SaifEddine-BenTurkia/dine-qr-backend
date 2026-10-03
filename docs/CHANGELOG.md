@@ -2,6 +2,19 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## UX-02 Professional look, full-screen caisse (2026-10-03)
+
+- Calmer, more professional screens: neutral colours, sharper cards, a top bar with "Voir mon
+  menu" and "Ouvrir la caisse", an account menu.
+- **Caisse → Plein écran**: the device next to the till shows only the caisse, with the time, the
+  counts and a dark bar. It stays full screen after a reload (one tap).
+- Orders show how long they have waited, amber then red.
+- A screen that fails to load offers "Recharger la page".
+
+**Test manually:** on the caisse tablet, Caisse → "Plein écran". Order from a phone: the count in
+the bar goes up and the order card shows "à l'instant". Reload the tablet, tap once: full screen
+again. Staff: "Changer" goes back to the PIN screen. "Quitter le plein écran" brings the menus back.
+
 ## Complete build: packs, order screen, loyalty, stock, usability (2026-10-03)
 
 - **Packs:** Standard, Premium, Business; the trial unlocks everything; locked features show what

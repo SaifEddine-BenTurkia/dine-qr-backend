@@ -21,7 +21,8 @@ a second phone as the waiter. It also serves as the manual test of the build.
 6. **Fidélité**: "Activer la carte", 9 stamps, "1 café offert", pick a colour and an icon.
 7. **Stock**: on one dish, add 10 "Ce soir".
 8. **Tablet**: open `/staff`, restaurant code + PIN 1234, then "Activer le son" and "Activer les
-   notifications". Install it ("Installer l'application") so it opens full screen.
+   notifications". Install it ("Installer l'application"), then tap **"Plein écran"**: only the
+   caisse stays on screen, with the clock and the counts.
    **Waiter phone**: `/staff`, PIN 5678, activate notifications, then lock the phone.
    (iPhone: add to the home screen first, then activate notifications from the installed app.)
 9. Do one full rehearsal (below).
