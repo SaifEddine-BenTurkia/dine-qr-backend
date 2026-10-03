@@ -82,6 +82,11 @@ then in the server's TableQR env file (in `/opt/tableqr`) either set `APP_ENV=pr
 mode: only after the first paying customer) or keep prelaunch and list the owners' addresses in
 `SANDBOX_ALLOWED_RECIPIENTS` (comma-separated); then redeploy (re-run the last CI/CD run on main).
 
+### Q9. A thermal printer to test tickets (2026-10-03)
+**Why:** tickets are built for 80/58 mm thermal printers and checked in print preview; a real
+printer check is still needed. **What:** one 80 mm USB thermal printer (ESC/POS, e.g. Xprinter
+XP-80, around 150–250 DT). Setup steps are in docs/features/O-03-printing.md.
+
 ## Assumptions made (say if one is wrong)
 
 - **A1 (P0-00).** A server without `APP_ENV` runs as `prelaunch`: sandbox rules apply and emails go
@@ -94,3 +99,7 @@ mode: only after the first paying customer) or keep prelaunch and list the owner
   the trial every feature is unlocked anyway (reverse trial).
 - **A4.** The owner dashboard and staff board stay in French until the rest of P0-05; the guest
   menu is in French, Arabic and English.
+- **A5.** P0-11 is built in a lean form (staff with PINs inside one restaurant). The Account /
+  Membership model for several outlets per account comes with the Business plan's multi-outlet.
+- **A6.** A service day runs from 05:00 to 05:00 Tunis time (order numbers and the closing).
+- **A7.** Receipts say "Ticket non fiscal": TableQR is not a certified fiscal cash register.

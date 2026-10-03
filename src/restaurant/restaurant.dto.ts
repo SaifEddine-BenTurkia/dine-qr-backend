@@ -13,6 +13,7 @@ import {
   Matches,
   MaxLength,
   ValidateIf,
+  IsBoolean,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) =>
@@ -103,6 +104,40 @@ export class CreateRestaurantDto {
   @ArrayMaxSize(SUPPORTED_LOCALES.length)
   @IsIn(SUPPORTED_LOCALES, { each: true })
   enabledLocales?: string[];
+
+  // Ordering and receipts (O-01, O-03).
+  @IsOptional()
+  @IsBoolean()
+  orderingEnabled?: boolean;
+
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(160)
+  receiptAddress?: string | null;
+
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(30)
+  receiptPhone?: string | null;
+
+  // Matricule fiscal, printed on receipts.
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(40)
+  taxId?: string | null;
+
+  @Transform(emptyToNull)
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(200)
+  receiptFooter?: string | null;
 }
 
 export class UpdateRestaurantDto extends PartialType(CreateRestaurantDto) {}

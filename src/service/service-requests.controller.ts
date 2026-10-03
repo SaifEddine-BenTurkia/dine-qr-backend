@@ -15,6 +15,7 @@ import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import {
   AllowQueryToken,
   CurrentUser,
+  ForRole,
   JwtAuthGuard,
   type AuthUser,
 } from '../common/auth.guard';
@@ -31,7 +32,8 @@ class StatsQuery {
   days: number = 7;
 }
 
-/** The staff live board (P1-06). */
+/** The staff live board (P1-06): owner and every staff role. */
+@ForRole('restaurant', 'staff')
 @UseGuards(JwtAuthGuard)
 @Controller('service-requests')
 export class ServiceRequestsController {

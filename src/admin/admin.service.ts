@@ -13,6 +13,7 @@ import {
   effectiveStatus,
   type EffectiveStatus,
 } from '../billing/subscription-status';
+import { fromMillimes } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -136,12 +137,16 @@ export class AdminService {
       }),
       this.prisma.paymentRequest.findMany({
         where: { status: 'PAID', handledAt: { gte: yearAgo } },
-        select: { amount: true, amountReceived: true, handledAt: true },
+        select: {
+          amountMillimes: true,
+          amountReceivedMillimes: true,
+          handledAt: true,
+        },
       }),
       this.prisma.paymentRequest.aggregate({
         where: { status: 'PENDING' },
         _count: true,
-        _sum: { amount: true },
+        _sum: { amountMillimes: true },
       }),
       this.prisma.scan.count({
         where: { createdAt: { gte: new Date(now.getTime() - 30 * DAY_MS) } },
@@ -172,7 +177,7 @@ export class AdminService {
     let thisMonth = 0;
     for (const p of paid) {
       if (!p.handledAt) continue;
-      const amount = (p.amountReceived ?? p.amount).toNumber();
+      const amount = p.amountReceivedMillimes ?? p.amountMillimes;
       const key = `${p.handledAt.getUTCFullYear()}-${String(p.handledAt.getUTCMonth() + 1).padStart(2, '0')}`;
       const bucket = months.find((m) => m.month === key);
       if (bucket) bucket.amount += amount;
@@ -180,7 +185,7 @@ export class AdminService {
     }
     const totalPaid = await this.prisma.paymentRequest.findMany({
       where: { status: 'PAID' },
-      select: { amount: true, amountReceived: true },
+      select: { amountMillimes: true, amountReceivedMillimes: true },
     });
 
     // Live menus whose access ends within 7 days: the owners to call.
@@ -218,18 +223,18 @@ export class AdminService {
       subscriptions: byStatus,
       liveMenus: byStatus.trialing + byStatus.active,
       revenue: {
-        thisMonth: round(thisMonth),
-        total: round(
+        thisMonth: fromMillimes(thisMonth),
+        total: fromMillimes(
           totalPaid.reduce(
-            (sum, p) => sum + (p.amountReceived ?? p.amount).toNumber(),
+            (sum, p) => sum + (p.amountReceivedMillimes ?? p.amountMillimes),
             0,
           ),
         ),
-        byMonth: months.map((m) => ({ ...m, amount: round(m.amount) })),
+        byMonth: months.map((m) => ({ ...m, amount: fromMillimes(m.amount) })),
       },
       pendingPayments: {
         count: pending._count,
-        amount: round(pending._sum.amount?.toNumber() ?? 0),
+        amount: fromMillimes(pending._sum.amountMillimes ?? 0),
       },
       scansLast30Days: scans30d,
       expiringSoon,
@@ -283,13 +288,13 @@ export class AdminService {
       this.prisma.paymentRequest.groupBy({
         by: ['userId'],
         where: { userId: { in: userIds }, status: 'PAID' },
-        _sum: { amountReceived: true },
+        _sum: { amountReceivedMillimes: true },
         _max: { handledAt: true },
         _count: true,
       }),
       this.prisma.paymentRequest.findMany({
         where: { userId: { in: userIds }, status: 'PENDING' },
-        select: { userId: true, reference: true, amount: true },
+        select: { userId: true, reference: true, amountMillimes: true },
       }),
       restaurantIds.length
         ? this.prisma.$queryRaw<
@@ -349,13 +354,13 @@ export class AdminService {
           },
           payments: {
             count: paidRow?._count ?? 0,
-            totalPaid: round(paidRow?._sum.amountReceived?.toNumber() ?? 0),
+            totalPaid: fromMillimes(paidRow?._sum.amountReceivedMillimes ?? 0),
             lastPaidAt: paidRow?._max.handledAt ?? null,
           },
           pendingRequest: pendingRow
             ? {
                 reference: pendingRow.reference,
-                amount: pendingRow.amount.toNumber(),
+                amount: fromMillimes(pendingRow.amountMillimes),
               }
             : null,
         };
@@ -372,7 +377,10 @@ export class AdminService {
     });
     return requests.map((r) => ({
       ...toRequestView(r),
-      amountReceived: r.amountReceived?.toNumber() ?? null,
+      amountReceived:
+        r.amountReceivedMillimes === null
+          ? null
+          : fromMillimes(r.amountReceivedMillimes),
       handledBy: r.handledBy,
     }));
   }
@@ -437,8 +445,4 @@ export class AdminService {
     });
     return { status: 'canceled' };
   }
-}
-
-function round(value: number) {
-  return Math.round(value * 1000) / 1000;
 }

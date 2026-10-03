@@ -38,6 +38,7 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 |---|---|---|---|
 | `admin` | Emails in `ADMIN_EMAILS` (server config, never the database) | `/admin` console only | Routes marked `@ForRole('admin')`, plus `/auth/me` |
 | `restaurant` | Every other account; owns one restaurant | `/dashboard` only | Every authenticated route without a role mark |
+| `staff` | StaffMember with a PIN session (`kind: staff` token) | `/staff` (caisse, calls) | Routes marked `@ForRole(..., 'staff')`, narrowed by `@StaffRoles` |
 | guest | Anonymous visitor | `/m/:slug` | `/public/menu/*` (rate limited) |
 
 - `JwtAuthGuard` (`src/common/auth.guard.ts`) reloads the user on every request (token version for
@@ -64,6 +65,8 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 | `insights` | `/stats/scans`, `/stats/overview`, `/restaurants/feedback` | Owner analytics |
 | `billing` | `/subscription`, `/admin/payment-requests` | Trial, cash payment requests |
 | `admin` | `/admin/*` | Overview, activity, system, accounts, payments |
+| `staff` | `/staff`, `/staff-auth/*` | Team (owner) and PIN sign-in (staff) |
+| `orders` | `/orders/*`, `/public/menu/:slug/orders` | Table orders, caisse, bills, Z report |
 | `ai` | `/ai/*` | Menu import and translation through OpenRouter |
 | `media` | `/library/*`, image uploads | Cloudinary |
 | `mail` | — | Resend; `RecipientPolicy` limits recipients outside production |
@@ -83,13 +86,15 @@ container today; with several, `ServiceHub` becomes a PostgreSQL LISTEN/NOTIFY b
 |---|---|
 | `User`, `UserToken` | Accounts; email verification and reset tokens (SHA-256 hashes only) |
 | `Restaurant` | One per restaurant account: profile, template, WiFi, Google Place ID, `defaultLocale`, `enabledLocales` |
-| `Category`, `Dish` | Menu; prices `Decimal(10,3)` in dinars (millimes migration is P0-04); `nameI18n`/`descriptionI18n` JSON, `aiLocales`; `soldOut`, `soldOutUntil` |
+| `Category`, `Dish` | Menu; prices in integer millimes (`priceMillimes`, P0-04); `nameI18n`/`descriptionI18n` JSON, `aiLocales`; `soldOut`, `soldOutUntil` |
 | `DiningTable` | Label, zone, unique random token for `?t=` |
 | `ServiceRequest` | WAITER / BILL_CASH / BILL_CARD; OPEN → ACKNOWLEDGED → DONE (or CANCELLED) |
 | `Event` | Guest and server events for analytics (type, table, session, item, props) |
 | `Feedback` | Rating, tags, comment, table, contact only with consent |
 | `Scan` | Menu opens with a salted visitor hash (to be replaced by `Event`, P0-06) |
 | `Subscription`, `PaymentRequest` | Trial and cash payments |
+| `StaffMember` | Staff of a restaurant: role, PIN HMAC (unique per restaurant), tokenVersion |
+| `Order`, `OrderItem`, `Bill` | Orders (daily number, status, snapshot lines in millimes), bills (method, discount) |
 
 Migrations: `init`, `manual_cash_payments`, `menu_template`, `guest_service`, `ai_locales`, `admin_totp`.
 New migrations must be additive or come with a backfill; `deploy.sh` backs up before migrating.

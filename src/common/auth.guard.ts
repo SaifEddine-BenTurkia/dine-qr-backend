@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import type { StaffRole } from '@prisma/client';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminAccess } from './admin';
@@ -19,7 +20,7 @@ import { AdminAccess } from './admin';
  * `admin` runs the platform (emails in ADMIN_EMAILS), `restaurant` runs one
  * restaurant. Staff roles inside a restaurant come with P0-11.
  */
-export type AccountRole = 'admin' | 'restaurant';
+export type AccountRole = 'admin' | 'restaurant' | 'staff';
 
 export interface AuthUser {
   id: string;
@@ -27,12 +28,16 @@ export interface AuthUser {
   role: AccountRole;
   /** The session passed the admin second factor (authenticator code). */
   mfa: boolean;
+  /** Staff sessions (PIN on a shared device): their restaurant and job. */
+  staff?: { restaurantId: string; role: StaffRole; name: string };
 }
 
 export interface JwtPayload {
   sub: string;
   ver: number;
   mfa?: boolean;
+  /** Present on staff sessions, whose `sub` is a StaffMember id. */
+  kind?: 'staff';
 }
 
 type AuthedRequest = Request & { user?: AuthUser };
@@ -49,11 +54,20 @@ export const AllowQueryToken = () => SetMetadata(QUERY_TOKEN, true);
 
 const ROLE = 'accountRole';
 
+const STAFF_ROLES = 'staffRoles';
+
+type Allowed = AccountRole | 'any';
+
 /**
- * Which account role may call these routes. Without it a route is for
- * restaurant accounts only; `any` is for routes every account needs (/auth/me).
+ * Which account roles may call these routes. Without it a route is for
+ * restaurant accounts only; `any` is for routes every user account needs
+ * (/auth/me). Staff sessions reach only routes that list 'staff'.
  */
-export const ForRole = (role: AccountRole | 'any') => SetMetadata(ROLE, role);
+export const ForRole = (...roles: Allowed[]) => SetMetadata(ROLE, roles);
+
+/** Narrows 'staff' access to some jobs (e.g. only cashiers accept orders). */
+export const StaffRoles = (...roles: StaffRole[]) =>
+  SetMetadata(STAFF_ROLES, roles);
 
 /** Lets a signed-in user whose email is not yet verified reach this route. */
 export const AllowUnverifiedEmail = () => SetMetadata(ALLOW_UNVERIFIED, true);
@@ -68,23 +82,24 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const allowed =
-      this.reflector.getAllAndOverride<AccountRole | 'any'>(ROLE, [
-        context.getHandler(),
-        context.getClass(),
-      ]) ?? 'restaurant';
+    const allowed = this.reflector.getAllAndOverride<Allowed[]>(ROLE, [
+      context.getHandler(),
+      context.getClass(),
+    ]) ?? ['restaurant'];
     try {
       return await this.check(context, allowed);
     } catch (error) {
       // Console routes do not admit they exist to anyone but an admin.
-      if (allowed === 'admin') throw new NotFoundException();
+      if (allowed.length === 1 && allowed[0] === 'admin') {
+        throw new NotFoundException();
+      }
       throw error;
     }
   }
 
   private async check(
     context: ExecutionContext,
-    allowed: AccountRole | 'any',
+    allowed: Allowed[],
   ): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
     let [scheme, token] = (req.headers.authorization ?? '').split(' ');
@@ -108,6 +123,10 @@ export class JwtAuthGuard implements CanActivate {
       payload = await this.jwt.verifyAsync<JwtPayload>(token);
     } catch {
       throw new UnauthorizedException('Session expirée, reconnectez-vous');
+    }
+
+    if (payload.kind === 'staff') {
+      return this.checkStaff(context, req, payload, allowed);
     }
 
     // Looked up on every request so a password reset revokes older sessions.
@@ -135,7 +154,7 @@ export class JwtAuthGuard implements CanActivate {
     const role: AccountRole = this.admins.isAdmin(user.email)
       ? 'admin'
       : 'restaurant';
-    if (allowed !== 'any' && allowed !== role) {
+    if (!allowed.includes('any') && !allowed.includes(role)) {
       throw new ForbiddenException(
         role === 'admin'
           ? 'Compte administrateur : utilisez la console /admin'
@@ -148,6 +167,49 @@ export class JwtAuthGuard implements CanActivate {
       email: user.email,
       role,
       mfa: role === 'admin' && payload.mfa === true,
+    };
+    return true;
+  }
+  private async checkStaff(
+    context: ExecutionContext,
+    req: AuthedRequest,
+    payload: JwtPayload,
+    allowed: Allowed[],
+  ): Promise<boolean> {
+    const staff = await this.prisma.staffMember.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        active: true,
+        tokenVersion: true,
+        restaurantId: true,
+      },
+    });
+    if (!staff || !staff.active || staff.tokenVersion !== payload.ver) {
+      throw new UnauthorizedException('Session expirée, reconnectez-vous');
+    }
+    if (!allowed.includes('staff')) {
+      throw new ForbiddenException('Réservé au responsable du restaurant');
+    }
+    const jobs = this.reflector.getAllAndOverride<StaffRole[] | undefined>(
+      STAFF_ROLES,
+      [context.getHandler(), context.getClass()],
+    );
+    if (jobs && !jobs.includes(staff.role)) {
+      throw new ForbiddenException('Votre rôle ne permet pas cette action');
+    }
+    req.user = {
+      id: staff.id,
+      email: '',
+      role: 'staff',
+      mfa: false,
+      staff: {
+        restaurantId: staff.restaurantId,
+        role: staff.role,
+        name: staff.name,
+      },
     };
     return true;
   }

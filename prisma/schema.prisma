@@ -58,25 +58,34 @@ model UserToken {
 }
 
 model Restaurant {
-  id             String   @id @default(uuid())
-  userId         String   @unique
-  name           String
-  slug           String   @unique
-  description    String?
-  logoUrl        String?
-  primaryColor   String?
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  name            String
+  slug            String   @unique
+  description     String?
+  logoUrl         String?
+  primaryColor    String?
   // Visual style of the public menu; see MENU_TEMPLATES in restaurant.dto.ts.
-  template       String   @default("classic")
+  template        String   @default("classic")
   // Guest WiFi, shown by the WiFi button on the guest menu (P1-05).
-  wifiSsid       String?
-  wifiPassword   String?
+  wifiSsid        String?
+  wifiPassword    String?
   // Google review link: https://search.google.com/local/writereview?placeid=<id> (P1-08).
-  googlePlaceId  String?
+  googlePlaceId   String?
   // Menu languages (P1-03): the default first; French is always available.
-  defaultLocale  String   @default("fr")
-  enabledLocales String[] @default(["fr"])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  defaultLocale   String   @default("fr")
+  enabledLocales  String[] @default(["fr"])
+  // Ordering from the table (O-01) and what the receipt prints (O-03).
+  orderingEnabled Boolean  @default(false)
+  receiptAddress  String?
+  receiptPhone    String?
+  taxId           String?
+  receiptFooter   String?
+  // Daily order numbers (#1, #2…), reset each day in Tunis time.
+  orderSeq        Int      @default(0)
+  orderSeqDay     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   categories      Category[]
@@ -85,6 +94,9 @@ model Restaurant {
   tables          DiningTable[]
   serviceRequests ServiceRequest[]
   events          Event[]
+  staff           StaffMember[]
+  orders          Order[]
+  bills           Bill[]
 }
 
 // A physical table with its own QR code (P1-01). The token is random and
@@ -101,6 +113,8 @@ model DiningTable {
 
   restaurant      Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   serviceRequests ServiceRequest[]
+  orders          Order[]
+  bills           Bill[]
 
   @@unique([restaurantId, label])
   @@index([restaurantId, position])
@@ -178,7 +192,8 @@ model Dish {
   categoryId      String
   name            String
   description     String?
-  price           Decimal   @db.Decimal(10, 3)
+  // Integer millimes (1 DT = 1000), never floats (P0-04).
+  priceMillimes   Int
   imageUrl        String?
   position        Int
   available       Boolean   @default(true)
@@ -192,7 +207,8 @@ model Dish {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
 
   @@index([categoryId, position])
 }
@@ -235,25 +251,26 @@ enum PaymentRequestStatus {
 // The manual payment queue: an owner asks to pay, an admin collects the cash
 // and marks it paid.
 model PaymentRequest {
-  id             String               @id @default(uuid())
+  id                     String               @id @default(uuid())
   // Short code the owner quotes on WhatsApp or by phone, e.g. TQ-7F3K2A.
-  reference      String               @unique
-  userId         String
-  months         Int
-  amount         Decimal              @db.Decimal(10, 3)
-  currency       String               @default("TND")
-  contactMethod  PaymentContactMethod
-  note           String?
-  status         PaymentRequestStatus @default(PENDING)
-  amountReceived Decimal?             @db.Decimal(10, 3)
-  adminNote      String?
-  handledBy      String?
-  handledAt      DateTime?
+  reference              String               @unique
+  userId                 String
+  months                 Int
+  // Integer millimes (P0-04).
+  amountMillimes         Int
+  currency               String               @default("TND")
+  contactMethod          PaymentContactMethod
+  note                   String?
+  status                 PaymentRequestStatus @default(PENDING)
+  amountReceivedMillimes Int?
+  adminNote              String?
+  handledBy              String?
+  handledAt              DateTime?
   // Paid period this request granted, kept for the audit trail.
-  periodStart    DateTime?
-  periodEnd      DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  periodStart            DateTime?
+  periodEnd              DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -290,4 +307,119 @@ model Feedback {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId, createdAt])
+}
+
+// Staff of one restaurant (P0-11, lean): sign in on a shared device with the
+// restaurant code and a PIN. The PIN is stored as an HMAC with a server key,
+// unique per restaurant, so it also identifies the person.
+enum StaffRole {
+  MANAGER
+  CASHIER
+  WAITER
+  KITCHEN
+}
+
+model StaffMember {
+  id           String    @id @default(uuid())
+  restaurantId String
+  name         String
+  role         StaffRole
+  pinHash      String
+  active       Boolean   @default(true)
+  // Bumped when the PIN, role or status changes: older sessions stop working.
+  tokenVersion Int       @default(0)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, pinHash])
+  @@index([restaurantId])
+}
+
+// Ordering (O-01…O-05). Money in integer millimes.
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  READY
+  SERVED
+  REJECTED
+  CANCELLED
+}
+
+enum OrderSource {
+  TABLE
+  COUNTER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  restaurantId  String
+  // Daily number shown on tickets and screens.
+  number        Int
+  source        OrderSource
+  tableId       String?
+  sessionId     String?
+  status        OrderStatus @default(PENDING)
+  note          String?
+  rejectReason  String?
+  totalMillimes Int
+  createdBy     String?
+  createdAt     DateTime    @default(now())
+  acceptedAt    DateTime?
+  readyAt       DateTime?
+  servedAt      DateTime?
+  billId        String?
+
+  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table      DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  bill       Bill?        @relation(fields: [billId], references: [id], onDelete: SetNull)
+  items      OrderItem[]
+
+  @@index([restaurantId, status, createdAt])
+  @@index([restaurantId, billId])
+  @@index([sessionId])
+}
+
+model OrderItem {
+  id                String  @id @default(uuid())
+  orderId           String
+  dishId            String?
+  // Snapshot at order time: later menu edits do not change past orders.
+  name              String
+  unitPriceMillimes Int
+  quantity          Int
+  note              String?
+  totalMillimes     Int
+  // Line order as the guest or cashier entered it.
+  position          Int     @default(0)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dish  Dish? @relation(fields: [dishId], references: [id], onDelete: SetNull)
+
+  @@index([dishId])
+}
+
+model Bill {
+  id               String        @id @default(uuid())
+  restaurantId     String
+  number           Int
+  tableId          String?
+  subtotalMillimes Int
+  discountMillimes Int           @default(0)
+  totalMillimes    Int
+  method           PaymentMethod
+  paidAt           DateTime      @default(now())
+  cashierName      String?
+
+  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table      DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  orders     Order[]
+
+  @@index([restaurantId, paidAt])
 }

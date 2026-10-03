@@ -34,6 +34,26 @@ demo were built first, on branch `feat/P1-guest-service` (stacked on P0-00) in b
 **2026-10-02, stopped after P0-00.** P0-00 is built and green in CI (backend PR #12, frontend PR #1),
 but merging to main was refused by Claude Code's permission system, so nothing is deployed yet.
 
+## New roadmap (owner decision 2026-10-03, see ROADMAP.md)
+
+Order: P0-04, P0-11, O-01, O-02, O-03, O-04, O-05, P0-03 (3 plans), L-01, L-02, L-03, S-01, S-02,
+S-03, S-04, then P1-10, P1-11, P7. Dropped: online payments, Google reviews hub, AI advisor.
+
+| ID | Feature | Status | Note |
+| --- | --- | --- | --- |
+| O-01 | Cart and table ordering | done | Guest cart → order with table QR, live status |
+| O-02 | Caisse screen | done | Live caisse, accept/refuse/ready/served |
+| O-03 | Ticket printing | done | Kitchen ticket, receipt, Z at 58/80 mm; real printer check waits for Q9 |
+| O-04 | Bill and payment at the counter | done | Pay per table, discount, cash/card, Z report |
+| O-05 | Counter sales | done | Counter grid, takeaway paid at once |
+| L-01 | Loyalty program | todo | |
+| L-02 | Google Wallet card | todo | Needs Google Wallet issuer account (owner) |
+| L-03 | Card designer | todo | |
+| S-01 | Stock per dish | todo | |
+| S-02 | Batches and expiry | todo | |
+| S-03 | Sales vs stock | todo | |
+| S-04 | Anti-waste suggestions | todo | |
+
 ## Owner requests outside the plan
 
 | ID | Feature | Status | Note |
@@ -52,8 +72,8 @@ Order: P0-00, P0-01, P0-02, P0-12, P0-13, P0-04, P0-11, P0-03, P0-05, P0-06, P0-
 | P0-02 | Tests, CI and seed data | done | Vitest, Playwright smoke, `npm run seed`, grouped Dependabot; prod test data replacement waits for Q7 |
 | P0-12 | Server hardening and reliability | todo | |
 | P0-13 | Final domain | todo | |
-| P0-04 | Money in millimes | todo | |
-| P0-11 | Account model and roles | todo | |
+| P0-04 | Money in millimes | done | Integer millimes in DB, shared helpers, exact migration |
+| P0-11 | Account model and roles | done (lean) | Staff PIN logins and roles; Account/Membership restructure deferred (A5) |
 | P0-03 | Plans, entitlements, feature flags | todo | |
 | P0-05 | i18n and RTL | in progress | Guest menu done (fr/ar/en, RTL) with P1-03; dashboard, emails, lint rule still to do |
 | P0-06 | Event tracking | in progress | Event table, guest tracker and server events built with P1-09; daily aggregates and Scan migration still to do |
