@@ -24,6 +24,7 @@ import { BillingService } from '../billing/billing.service';
 import type { EffectiveStatus } from '../billing/subscription-status';
 import { AdminGuard } from '../common/admin';
 import { CurrentUser, JwtAuthGuard, type AuthUser } from '../common/auth.guard';
+import { AdminActivityService } from './admin-activity.service';
 import { AdminService } from './admin.service';
 
 const STATUSES: EffectiveStatus[] = [
@@ -67,6 +68,13 @@ class RecordPaymentDto {
   adminNote?: string;
 }
 
+class ActivityQuery {
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([1, 7, 30, 90])
+  days: number = 7;
+}
+
 class ExtendTrialDto {
   @Type(() => Number)
   @IsInt()
@@ -81,11 +89,22 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly billing: BillingService,
+    private readonly activityService: AdminActivityService,
   ) {}
 
   @Get('overview')
   overview() {
     return this.admin.overview();
+  }
+
+  @Get('activity')
+  activity(@Query() query: ActivityQuery) {
+    return this.activityService.activity(query.days);
+  }
+
+  @Get('system')
+  system() {
+    return this.activityService.system();
   }
 
   @Get('accounts')

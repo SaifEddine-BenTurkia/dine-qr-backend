@@ -61,7 +61,9 @@ describe('Guest service (e2e)', () => {
 
   afterAll(async () => {
     await prisma.user.deleteMany({
-      where: { email: { in: owners.map((o) => o.email) } },
+      where: {
+        email: { in: [...owners.map((o) => o.email), 'svc-admin@example.com'] },
+      },
     });
     await app.close();
   });
@@ -270,5 +272,52 @@ describe('Guest service (e2e)', () => {
     expect(res.body.languages).toEqual([{ locale: 'ar', count: 1 }]);
     const other = await http().get('/stats/overview').set(as(1)).expect(200);
     expect(other.body.menuOpens).toBe(0);
+  });
+
+  it('shows platform activity and system state to the admin only', async () => {
+    await http().get('/admin/activity').set(as(0)).expect(403);
+    await http().get('/admin/system').set(as(0)).expect(403);
+
+    await prisma.user.deleteMany({ where: { email: 'svc-admin@example.com' } });
+    const admin = await prisma.user.create({
+      data: {
+        email: 'svc-admin@example.com',
+        passwordHash: 'not-used',
+        fullName: 'Platform admin',
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const asAdmin = {
+      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0 })}`,
+    };
+
+    const res = await http()
+      .get('/admin/activity?days=7')
+      .set(asAdmin)
+      .expect(200);
+    const row = res.body.restaurants.find(
+      (r: { slug: string }) => r.slug === owners[0].slug,
+    );
+    expect(row).toMatchObject({
+      visits: 1,
+      requests: 2,
+      feedback: 1,
+      avgRating: 2,
+      adoption: { tables: expect.any(Number) },
+    });
+    expect(res.body.daily).toHaveLength(7);
+    expect(res.body.totals.lowRatings).toBeGreaterThanOrEqual(1);
+    // Guest contact details never reach the platform view.
+    expect(JSON.stringify(res.body.recentFeedback)).not.toContain('contact');
+
+    await http().get('/admin/activity?days=5').set(asAdmin).expect(400);
+
+    const system = await http().get('/admin/system').set(asAdmin).expect(200);
+    expect(system.body).toMatchObject({
+      database: { ok: true },
+      liveBoardConnections: expect.any(Number),
+      integrations: { ai: expect.any(Boolean) },
+    });
+    expect(JSON.stringify(system.body)).not.toMatch(/sk-|re_|secret/i);
   });
 });

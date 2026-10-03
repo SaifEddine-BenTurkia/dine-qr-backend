@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { Observable, Subject, filter, interval, map, merge } from 'rxjs';
+import {
+  Observable,
+  Subject,
+  defer,
+  filter,
+  finalize,
+  interval,
+  map,
+  merge,
+} from 'rxjs';
 
 export type HubEvent =
   | { kind: 'request'; id: string; type: string; table: string }
@@ -28,6 +37,12 @@ const HEARTBEAT_MS = 25_000;
 @Injectable()
 export class ServiceHub {
   private readonly events = new Subject<Envelope>();
+  private open = 0;
+
+  /** Staff screens connected right now, across all restaurants. */
+  get connections() {
+    return this.open;
+  }
 
   publish(restaurantId: string, event: HubEvent) {
     this.events.next({ restaurantId, event });
@@ -36,12 +51,15 @@ export class ServiceHub {
   /** Server-Sent Events for one restaurant, with a heartbeat every 25 s so
    * nginx and Cloudflare keep the connection open. */
   stream(restaurantId: string): Observable<{ data: unknown; type?: string }> {
-    return merge(
-      this.events.pipe(
-        filter((envelope) => envelope.restaurantId === restaurantId),
-        map((envelope) => ({ data: envelope.event })),
-      ),
-      interval(HEARTBEAT_MS).pipe(map(() => ({ type: 'ping', data: {} }))),
-    );
+    return defer(() => {
+      this.open += 1;
+      return merge(
+        this.events.pipe(
+          filter((envelope) => envelope.restaurantId === restaurantId),
+          map((envelope) => ({ data: envelope.event })),
+        ),
+        interval(HEARTBEAT_MS).pipe(map(() => ({ type: 'ping', data: {} }))),
+      ).pipe(finalize(() => (this.open -= 1)));
+    });
   }
 }
