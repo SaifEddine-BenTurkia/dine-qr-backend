@@ -15,13 +15,37 @@ export function toCategoryView(category: Category) {
   };
 }
 
-/** Sold out right now: the flag is set and its reset time has not passed. */
-export function isSoldOut(dish: Pick<Dish, 'soldOut' | 'soldOutUntil'>) {
-  return dish.soldOut && (!dish.soldOutUntil || dish.soldOutUntil > new Date());
+/**
+ * Sold out right now: the flag is set and its reset time has not passed, or
+ * the dish's stock is tracked and empty (S-01).
+ */
+export function isSoldOut(
+  dish: Pick<Dish, 'soldOut' | 'soldOutUntil' | 'trackStock' | 'stockQty'>,
+  stockEnabled = true,
+) {
+  return (
+    (dish.soldOut && (!dish.soldOutUntil || dish.soldOutUntil > new Date())) ||
+    (stockEnabled && dish.trackStock && dish.stockQty <= 0)
+  );
 }
 
-export function toDishView(dish: Dish) {
-  const soldOut = isSoldOut(dish);
+/** The promo price while it runs (S-04), otherwise the menu price. */
+export function effectivePriceMillimes(
+  dish: Pick<Dish, 'priceMillimes' | 'promoPriceMillimes' | 'promoEndsAt'>,
+  now = new Date(),
+) {
+  return dish.promoPriceMillimes !== null &&
+    dish.promoEndsAt !== null &&
+    dish.promoEndsAt > now
+    ? dish.promoPriceMillimes
+    : dish.priceMillimes;
+}
+
+export function toDishView(dish: Dish, options: { stock?: boolean } = {}) {
+  const stockEnabled = options.stock ?? true;
+  const soldOut = isSoldOut(dish, stockEnabled);
+  const effective = effectivePriceMillimes(dish);
+  const promo = effective !== dish.priceMillimes;
   return {
     id: dish.id,
     categoryId: dish.categoryId,
@@ -38,6 +62,14 @@ export function toDishView(dish: Dish) {
     position: dish.position,
     available: dish.available,
     soldOut,
-    soldOutUntil: soldOut ? dish.soldOutUntil : null,
+    soldOutUntil: soldOut && dish.soldOut ? dish.soldOutUntil : null,
+    // Promo running now: what the guest pays, and until when.
+    promoPrice: promo ? fromMillimes(effective) : null,
+    promoPercent: promo
+      ? Math.round((1 - effective / dish.priceMillimes) * 100)
+      : null,
+    promoEndsAt: promo ? dish.promoEndsAt : null,
+    trackStock: stockEnabled && dish.trackStock,
+    stockQty: stockEnabled && dish.trackStock ? dish.stockQty : null,
   };
 }

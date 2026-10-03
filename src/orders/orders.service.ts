@@ -8,11 +8,21 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type OrderStatus, type PaymentMethod } from '@prisma/client';
+import {
+  EntitlementsService,
+  planRequired,
+} from '../billing/entitlements.service';
+import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
-import { fromMillimes, sumMillimes } from '../common/money';
+import { formatDinars, fromMillimes, sumMillimes } from '../common/money';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { serviceDay } from '../common/service-day';
+import { effectivePriceMillimes } from '../menu/menu.views';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
 import { ServiceHub } from '../service/service-hub';
+import { StockService } from '../stock/stock.service';
 
 export interface OrderLineInput {
   dishId: string;
@@ -25,16 +35,12 @@ const ACTIVE: OrderStatus[] = ['PENDING', 'ACCEPTED', 'READY', 'SERVED'];
 // Orders a cashier can still put on a bill.
 const BILLABLE: OrderStatus[] = ['ACCEPTED', 'READY', 'SERVED'];
 
-/**
- * A service day runs from 05:00 to 05:00 in Tunis (04:00 UTC, no DST): a café
- * open until 2 a.m. keeps the same day for its numbers and its Z report.
- */
-export function serviceDay(now = new Date()) {
-  const start = new Date(now);
-  start.setUTCHours(4, 0, 0, 0);
-  if (start > now) start.setUTCDate(start.getUTCDate() - 1);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { key: start.toISOString().slice(0, 10), start, end };
+export { serviceDay };
+
+/** "2 × Café, 1 × Brik" for notifications. */
+function summary(items: { quantity: number; name: string }[]) {
+  const text = items.map((i) => `${i.quantity} × ${i.name}`).join(', ');
+  return text.length > 90 ? `${text.slice(0, 89)}…` : text;
 }
 
 const orderInclude = {
@@ -82,7 +88,21 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly access: RestaurantAccessService,
     private readonly hub: ServiceHub,
+    private readonly entitlements: EntitlementsService,
+    private readonly push: PushService,
+    private readonly loyalty: LoyaltyService,
+    private readonly stock: StockService,
   ) {}
+
+  /** The caisse belongs to Premium; counter sales and closing to Business. */
+  private async restaurantFor(
+    userId: string,
+    feature: 'ordering' | 'counterSales' = 'ordering',
+  ) {
+    const restaurantId = await this.access.restaurantIdFor(userId);
+    await this.entitlements.require(restaurantId, feature);
+    return restaurantId;
+  }
 
   /* ───────────── guest side (O-01) ───────────── */
 
@@ -109,6 +129,9 @@ export class OrdersService {
         "Ce menu n'est pas disponible pour le moment",
         HttpStatus.PAYMENT_REQUIRED,
       );
+    }
+    if (!ENTITLEMENTS[effectivePlan(restaurant.user.subscription)].ordering) {
+      throw planRequired('ordering');
     }
     if (!restaurant.orderingEnabled) {
       throw new ForbiddenException(
@@ -154,6 +177,12 @@ export class OrdersService {
       number: order.number,
       table: table.label,
     });
+    this.push.notify(restaurant.id, ['OWNER', 'MANAGER', 'CASHIER'], {
+      title: `Nouvelle commande N° ${order.number} · table ${table.label}`,
+      body: `${summary(order.items)} · ${formatDinars(order.totalMillimes)}`,
+      tag: `order-${order.id}`,
+      sticky: true,
+    });
     return order;
   }
 
@@ -174,15 +203,18 @@ export class OrdersService {
 
   async cancelFromGuest(slug: string, id: string, sessionId: string) {
     const restaurantId = await this.restaurantIdBySlug(slug);
-    const { count } = await this.prisma.order.updateMany({
-      where: { id, restaurantId, sessionId, status: 'PENDING' },
-      data: { status: 'CANCELLED' },
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.order.updateMany({
+        where: { id, restaurantId, sessionId, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
+      if (!count) {
+        throw new ConflictException(
+          'Cette commande est déjà acceptée : demandez au serveur',
+        );
+      }
+      await this.stock.release(tx, restaurantId, id);
     });
-    if (!count) {
-      throw new ConflictException(
-        'Cette commande est déjà acceptée : demandez au serveur',
-      );
-    }
     this.hub.publish(restaurantId, {
       kind: 'order-update',
       id,
@@ -195,7 +227,7 @@ export class OrdersService {
 
   /** Orders still in progress, plus today's closed ones for the history. */
   async list(userId: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const day = serviceDay();
     const orders = await this.prisma.order.findMany({
       where: {
@@ -217,7 +249,7 @@ export class OrdersService {
     actor: string,
     input: { items: OrderLineInput[]; note?: string; tableId?: string },
   ) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId, 'counterSales');
     if (input.tableId) {
       const table = await this.prisma.diningTable.count({
         where: { id: input.tableId, restaurantId },
@@ -246,7 +278,7 @@ export class OrdersService {
     next: 'ACCEPTED' | 'REJECTED' | 'READY' | 'SERVED',
     reason?: string,
   ) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const from: Record<typeof next, OrderStatus[]> = {
       ACCEPTED: ['PENDING'],
       REJECTED: ['PENDING'],
@@ -254,15 +286,21 @@ export class OrdersService {
       SERVED: ['ACCEPTED', 'READY'],
     };
     const now = new Date();
-    const { count } = await this.prisma.order.updateMany({
-      where: { id, restaurantId, status: { in: from[next] } },
-      data: {
-        status: next,
-        ...(next === 'ACCEPTED' && { acceptedAt: now }),
-        ...(next === 'REJECTED' && { rejectReason: reason ?? null }),
-        ...(next === 'READY' && { readyAt: now }),
-        ...(next === 'SERVED' && { servedAt: now }),
-      },
+    const count = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id, restaurantId, status: { in: from[next] } },
+        data: {
+          status: next,
+          ...(next === 'ACCEPTED' && { acceptedAt: now }),
+          ...(next === 'REJECTED' && { rejectReason: reason ?? null }),
+          ...(next === 'READY' && { readyAt: now }),
+          ...(next === 'SERVED' && { servedAt: now }),
+        },
+      });
+      if (updated.count && next === 'REJECTED') {
+        await this.stock.release(tx, restaurantId, id);
+      }
+      return updated.count;
     });
     const order = await this.prisma.order.findFirst({
       where: { id, restaurantId },
@@ -279,12 +317,26 @@ export class OrdersService {
       id,
       status: next,
     });
+    if (next === 'READY') {
+      // Whoever serves takes it to the table.
+      this.push.notify(
+        restaurantId,
+        ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'],
+        {
+          title: `Commande N° ${order.number} prête`,
+          body: order.table
+            ? `À servir table ${order.table.label} · ${summary(toOrderView(order).items)}`
+            : `Comptoir · ${summary(toOrderView(order).items)}`,
+          tag: `order-${order.id}`,
+        },
+      );
+    }
     return toOrderView(order);
   }
 
   /** Open tabs: per table (and counter), the orders not yet paid. */
   async openTabs(userId: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const orders = await this.prisma.order.findMany({
       where: { restaurantId, billId: null, status: { in: BILLABLE } },
       include: orderInclude,
@@ -311,9 +363,10 @@ export class OrdersService {
       orderIds: string[];
       method: PaymentMethod;
       discountMillimes?: number;
+      loyaltyCardId?: string;
     },
   ) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId);
     const bill = await this.prisma.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -359,6 +412,18 @@ export class OrdersService {
       return created;
     });
     this.hub.publish(restaurantId, { kind: 'bill', id: bill.id });
+    if (input.loyaltyCardId) {
+      // The payment stands even if the stamp cannot be given.
+      const stamped = await this.loyalty
+        .stampForBill(restaurantId, input.loyaltyCardId, bill, actor)
+        .catch(() => null);
+      if (stamped?.stamped) {
+        await this.prisma.bill.update({
+          where: { id: bill.id },
+          data: { loyaltyCardId: input.loyaltyCardId },
+        });
+      }
+    }
     return this.receipt(userId, bill.id);
   }
 
@@ -401,6 +466,9 @@ export class OrdersService {
     return {
       id: bill.id,
       number: bill.number,
+      loyalty: bill.loyaltyCardId
+        ? await this.loyalty.receiptLine(restaurantId, bill.loyaltyCardId)
+        : null,
       table: bill.table?.label ?? null,
       paidAt: bill.paidAt,
       method: bill.method,
@@ -421,7 +489,7 @@ export class OrdersService {
 
   /** Daily closing ("Z") for one service day: totals by payment method. */
   async dayReport(userId: string, dateKey?: string) {
-    const restaurantId = await this.access.restaurantIdFor(userId);
+    const restaurantId = await this.restaurantFor(userId, 'counterSales');
     const day = dateKey
       ? serviceDay(new Date(`${dateKey}T12:00:00Z`))
       : serviceDay();
@@ -449,7 +517,8 @@ export class OrdersService {
           },
         },
         _sum: { quantity: true, totalMillimes: true },
-        orderBy: { _sum: { quantity: 'desc' } },
+        // Ties sorted by name, so the list is stable.
+        orderBy: [{ _sum: { quantity: 'desc' } }, { name: 'asc' }],
         take: 15,
       }),
     ]);
@@ -500,6 +569,9 @@ export class OrdersService {
       createdBy?: string;
     },
   ) {
+    // Stock only counts on plans that include it; expired stock leaves first.
+    const stockEnabled = (await this.entitlements.of(restaurantId)).stock;
+    if (stockEnabled) await this.stock.sweep(restaurantId);
     // Prices always come from the menu, never from the client.
     const dishIds = [...new Set(input.items.map((i) => i.dishId))];
     const dishes = await this.prisma.dish.findMany({
@@ -514,25 +586,27 @@ export class OrdersService {
       }
       const soldOut =
         dish.soldOut && (!dish.soldOutUntil || dish.soldOutUntil > now);
-      if (soldOut) {
+      if (soldOut || (stockEnabled && dish.trackStock && dish.stockQty <= 0)) {
         throw new ConflictException(`« ${dish.name} » est épuisé`);
       }
     }
     const lines = input.items.map((line, position) => {
       const dish = byId.get(line.dishId)!;
+      // A running promo is the price the guest sees, so the one charged.
+      const unit = effectivePriceMillimes(dish, now);
       return {
         dishId: dish.id,
         name: dish.name,
-        unitPriceMillimes: dish.priceMillimes,
+        unitPriceMillimes: unit,
         quantity: line.quantity,
         note: line.note?.trim() || null,
-        totalMillimes: dish.priceMillimes * line.quantity,
+        totalMillimes: unit * line.quantity,
         position,
       };
     });
     const order = await this.prisma.$transaction(async (tx) => {
       const number = await this.nextNumber(tx, restaurantId, 'order');
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           restaurantId,
           number,
@@ -548,6 +622,22 @@ export class OrdersService {
         },
         include: orderInclude,
       });
+      // The stock is held from the moment the order exists; a refusal or a
+      // cancellation gives it back.
+      if (stockEnabled) {
+        await this.stock.consume(
+          tx,
+          restaurantId,
+          created.id,
+          lines.map((l) => ({
+            dishId: l.dishId,
+            name: l.name,
+            quantity: l.quantity,
+            tracked: byId.get(l.dishId)!.trackStock,
+          })),
+        );
+      }
+      return created;
     });
     return toOrderView(order);
   }

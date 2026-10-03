@@ -1,11 +1,17 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { EntitlementsService } from './billing/entitlements.service';
 import { AdminAccess, AdminGuard } from './common/admin';
 import { JwtAuthGuard } from './common/auth.guard';
 import { MailService } from './mail/mail.service';
 import { RecipientPolicy } from './mail/recipient-policy';
 import { MediaService } from './media/media.service';
+import {
+  PUSH_TRANSPORT,
+  PushService,
+  webPushTransport,
+} from './push/push.service';
 import { RestaurantAccessService } from './restaurant/restaurant-access.service';
 
 // Services every feature module uses, registered once.
@@ -30,6 +36,9 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
     RecipientPolicy,
     MediaService,
     RestaurantAccessService,
+    EntitlementsService,
+    { provide: PUSH_TRANSPORT, useValue: webPushTransport },
+    PushService,
   ],
   exports: [
     JwtModule,
@@ -40,6 +49,8 @@ import { RestaurantAccessService } from './restaurant/restaurant-access.service'
     RecipientPolicy,
     MediaService,
     RestaurantAccessService,
+    EntitlementsService,
+    PushService,
   ],
 })
 export class SharedModule {}

@@ -14,6 +14,7 @@ import { PaymentContactMethod, PaymentRequestStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -30,11 +31,16 @@ import {
   type AuthUser,
 } from '../common/auth.guard';
 import { BillingService } from './billing.service';
+import { PLAN_IDS, type PlanId } from './plan-catalog';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 class CreatePaymentRequestDto {
+  @IsOptional()
+  @IsIn(PLAN_IDS)
+  plan?: PlanId;
+
   @IsInt()
   @Min(1)
   @Max(24)

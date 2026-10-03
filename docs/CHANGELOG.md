@@ -2,6 +2,32 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## Complete build: packs, order screen, loyalty, stock, usability (2026-10-03)
+
+- **Packs:** Standard, Premium, Business; the trial unlocks everything; locked features show what
+  the bigger pack adds.
+- **Caisse:** one live screen with a ring that repeats until an order is accepted, notifications on
+  locked phones, three columns (new, in preparation, ready), table calls, installable app.
+- **Fidélité:** stamp card from the menu, stamp at payment, reward, card designer, Google Wallet
+  ready.
+- **Stock:** quantities, sell-by times, automatic sold-out, waste, promo suggestions and promo
+  prices on the menu.
+- **Usability:** grouped navigation, "Vos outils" on the home page, settings in tabs, clearer
+  ordering on the guest's phone.
+
+**Test manually (15 minutes, two devices):**
+1. Restaurant → "Commande et ticket": turn on ordering. Équipe: add a cashier (PIN 1234) and a
+   waiter (PIN 5678).
+2. Tablet: open /staff, sign in as the cashier, "Activer le son" and "Activer les notifications".
+   A second phone: sign in as the waiter and activate notifications too, then lock it.
+3. Your phone: scan a table QR, add two dishes, "Voir la commande" → "Envoyer". The tablet rings.
+   Accept (the ticket prints), "Prête" (the waiter's phone gets a notification), "Servie".
+4. Fidélité → "Activer la carte". On your phone: "Obtenir ma carte". On the tablet: À encaisser →
+   the table → "Carte de fidélité du client" → your name → Espèces. Your card shows 1 stamp.
+5. Stock → add 10 of a dish "Ce soir" → a promo is suggested → apply it → the menu shows the old
+   price struck.
+6. Abonnement: the three packs.
+
 ## Ordering and caisse: P0-11 (lean), O-01 to O-05 (2026-10-03)
 
 - **Équipe**: staff with roles and PINs; staff sign in at /staff on the caisse device.

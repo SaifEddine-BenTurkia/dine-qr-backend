@@ -7,11 +7,16 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ServiceRequestType } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import { EntitlementsService } from '../billing/entitlements.service';
+import { ENTITLEMENTS, effectivePlan } from '../billing/plan-catalog';
 import { isMenuLive } from '../billing/subscription-status';
 import { toCategoryView, toDishView } from '../menu/menu.views';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { toRestaurantView } from '../restaurant/restaurant.service';
 import { ServiceHub } from '../service/service-hub';
+import { StockService } from '../stock/stock.service';
 import {
   ServiceRequestsService,
   type GuestTableRef,
@@ -54,12 +59,22 @@ export class PublicMenuService {
     private readonly prisma: PrismaService,
     private readonly requests: ServiceRequestsService,
     private readonly hub: ServiceHub,
+    private readonly entitlements: EntitlementsService,
+    private readonly push: PushService,
+    private readonly loyalty: LoyaltyService,
+    private readonly stock: StockService,
     config: ConfigService,
   ) {
     this.salt = config.get<string>('SCAN_HASH_SALT') ?? 'development-salt';
   }
 
   async getMenu(slug: string, tableToken?: string) {
+    // Stock past its date leaves the menu (checked at most once a minute).
+    const known = await this.prisma.restaurant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (known) await this.stock.sweepSoon(known.id).catch(() => undefined);
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { slug },
       include: {
@@ -91,11 +106,31 @@ export class PublicMenuService {
     const table = tableToken
       ? restaurant.tables.find((t) => t.token === tableToken)
       : undefined;
+    // What the plan allows decides what the guest sees (P0-03).
+    const plan = ENTITLEMENTS[effectivePlan(restaurant.user.subscription)];
+    const view = toRestaurantView(restaurant);
+    const locales =
+      plan.locales === 'all'
+        ? view.enabledLocales
+        : view.enabledLocales.filter((code) => plan.locales.includes(code));
+    const ordering = plan.ordering && restaurant.orderingEnabled;
     return {
-      restaurant: toRestaurantView(restaurant),
+      restaurant: {
+        ...view,
+        enabledLocales: locales.length ? locales : ['fr'],
+        defaultLocale: locales.includes(view.defaultLocale)
+          ? view.defaultLocale
+          : 'fr',
+        orderingEnabled: ordering,
+      },
+      features: { serviceCalls: plan.serviceCalls, ordering },
+      // The stamp card guests can get from the menu, when the program is on.
+      loyalty: await this.loyalty.publicProgram(restaurant.id, plan.loyalty),
       categories: restaurant.categories.map((category) => ({
         ...toCategoryView(category),
-        dishes: category.dishes.map(toDishView),
+        dishes: category.dishes.map((dish) =>
+          toDishView(dish, { stock: plan.stock }),
+        ),
       })),
       // The table from the QR code, if any. Without one, guests pick their
       // table from the labels (never the tokens) when they call a waiter.
@@ -167,6 +202,7 @@ export class PublicMenuService {
     ref: GuestTableRef,
   ) {
     const restaurantId = await this.restaurantId(slug);
+    await this.entitlements.require(restaurantId, 'serviceCalls');
     return this.requests.createFromGuest(restaurantId, sessionId, type, ref);
   }
 
@@ -216,6 +252,13 @@ export class PublicMenuService {
         rating: input.rating,
         table: table?.label ?? null,
         comment: feedback.comment ? feedback.comment.slice(0, 140) : null,
+      });
+      this.push.notify(restaurantId, ['OWNER', 'MANAGER'], {
+        title: `Avis ${input.rating}/5${table ? ` · table ${table.label}` : ''}`,
+        body: feedback.comment
+          ? feedback.comment.slice(0, 120)
+          : 'Passez voir ce client avant qu’il parte.',
+        tag: `feedback-${feedback.id}`,
       });
     }
     return { success: true, id: feedback.id };

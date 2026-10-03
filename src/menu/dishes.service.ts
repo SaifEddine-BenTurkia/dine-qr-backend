@@ -27,7 +27,7 @@ export class DishesService {
       where: { category: { restaurantId }, ...(categoryId && { categoryId }) },
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     });
-    return dishes.map(toDishView);
+    return dishes.map((dish) => toDishView(dish));
   }
 
   async create(userId: string, input: CreateDishDto) {

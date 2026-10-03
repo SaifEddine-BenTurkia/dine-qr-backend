@@ -1,7 +1,12 @@
 import {
+  EntitlementsService,
+  planRequired,
+} from '../billing/entitlements.service';
+import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Restaurant } from '@prisma/client';
@@ -20,6 +25,7 @@ export class RestaurantService {
     private readonly access: RestaurantAccessService,
     private readonly media: MediaService,
     private readonly config: ConfigService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   async get(userId: string) {
@@ -76,6 +82,20 @@ export class RestaurantService {
 
   async update(userId: string, input: UpdateRestaurantDto) {
     const restaurantId = await this.access.restaurantIdFor(userId);
+    const plan = await this.entitlements.of(restaurantId);
+    if (input.orderingEnabled && !plan.ordering) throw planRequired('ordering');
+    if (plan.locales !== 'all' && input.enabledLocales) {
+      const allowed = plan.locales;
+      if (input.enabledLocales.some((code) => !allowed.includes(code))) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          code: 'PLAN_REQUIRED',
+          requiredPlan: 'premium',
+          message:
+            'Votre pack inclut le français et l’arabe. Les autres langues font partie du pack Premium.',
+        });
+      }
+    }
     try {
       const restaurant = await this.prisma.restaurant.update({
         where: { id: restaurantId },

@@ -87,16 +87,19 @@ model Restaurant {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categories      Category[]
-  scans           Scan[]
-  feedback        Feedback[]
-  tables          DiningTable[]
-  serviceRequests ServiceRequest[]
-  events          Event[]
-  staff           StaffMember[]
-  orders          Order[]
-  bills           Bill[]
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories        Category[]
+  scans             Scan[]
+  feedback          Feedback[]
+  tables            DiningTable[]
+  serviceRequests   ServiceRequest[]
+  events            Event[]
+  staff             StaffMember[]
+  orders            Order[]
+  bills             Bill[]
+  pushSubscriptions PushSubscription[]
+  loyaltyProgram    LoyaltyProgram?
+  loyaltyCards      LoyaltyCard[]
 }
 
 // A physical table with its own QR code (P1-01). The token is random and
@@ -188,27 +191,36 @@ model Category {
 }
 
 model Dish {
-  id              String    @id @default(uuid())
-  categoryId      String
-  name            String
-  description     String?
+  id                 String    @id @default(uuid())
+  categoryId         String
+  name               String
+  description        String?
   // Integer millimes (1 DT = 1000), never floats (P0-04).
-  priceMillimes   Int
-  imageUrl        String?
-  position        Int
-  available       Boolean   @default(true)
+  priceMillimes      Int
+  imageUrl           String?
+  position           Int
+  available          Boolean   @default(true)
   // Sold out (P1-04): shown greyed "Épuisé"; soldOutUntil resets it (05:00 Tunis).
-  soldOut         Boolean   @default(false)
-  soldOutUntil    DateTime?
-  nameI18n        Json?
-  descriptionI18n Json?
+  soldOut            Boolean   @default(false)
+  soldOutUntil       DateTime?
+  nameI18n           Json?
+  descriptionI18n    Json?
   // Locales whose translation came from AI and is not yet checked by the owner.
-  aiLocales       String[]  @default([])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  aiLocales          String[]  @default([])
+  // Stock (S-01): when tracked, each sale takes from stockQty and the dish
+  // shows as sold out at 0. stockQty is the sum of its batches' remaining.
+  trackStock         Boolean   @default(false)
+  stockQty           Int       @default(0)
+  // Promo price (S-04): replaces the price until promoEndsAt.
+  promoPriceMillimes Int?
+  promoEndsAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category   Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems OrderItem[]
+  batches    StockBatch[]
+  movements  StockMovement[]
 
   @@index([categoryId, position])
 }
@@ -227,6 +239,9 @@ model Subscription {
   userId           String             @unique
   status           SubscriptionStatus
   currency         String             @default("TND")
+  // standard | premium | business (src/billing/plan-catalog.ts). During the
+  // trial everything is unlocked whatever this says.
+  plan             String             @default("standard")
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
   createdAt        DateTime           @default(now())
@@ -256,6 +271,8 @@ model PaymentRequest {
   reference              String               @unique
   userId                 String
   months                 Int
+  // The plan this payment buys (standard, premium, business).
+  plan                   String               @default("standard")
   // Integer millimes (P0-04).
   amountMillimes         Int
   currency               String               @default("TND")
@@ -331,7 +348,8 @@ model StaffMember {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant        Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  pushSubscriptions PushSubscription[]
 
   @@unique([restaurantId, pinHash])
   @@index([restaurantId])
@@ -416,10 +434,152 @@ model Bill {
   method           PaymentMethod
   paidAt           DateTime      @default(now())
   cashierName      String?
+  // The loyalty card stamped by this payment, if any (L-01).
+  loyaltyCardId    String?
 
-  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  table      DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  orders     Order[]
+  restaurant  Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table       DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  orders      Order[]
+  loyaltyCard LoyaltyCard? @relation(fields: [loyaltyCardId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId, paidAt])
+}
+
+// Settings the server generates and must keep across restarts (the web push
+// keys). Secret parts are sealed with a key derived from JWT_SECRET.
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// A device that asked for notifications (O-06): the owner's (role OWNER) or a
+// staff member's (their job when the device subscribed).
+model PushSubscription {
+  id           String    @id @default(uuid())
+  restaurantId String
+  staffId      String?
+  role         String
+  endpoint     String    @unique
+  p256dh       String
+  auth         String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  staff      StaffMember? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, role])
+}
+
+// Loyalty (L-01…L-03): one stamp-card program per restaurant.
+model LoyaltyProgram {
+  restaurantId     String   @id
+  enabled          Boolean  @default(false)
+  // "9 achats = 1 offert": stamps needed for one reward, and the reward.
+  stampsRequired   Int      @default(9)
+  rewardText       String   @default("1 consommation offerte")
+  // One stamp per paid ticket of at least this amount (0 = every ticket).
+  minSpendMillimes Int      @default(0)
+  // Card design, shown on the web card and in Google Wallet.
+  cardTitle        String?
+  backgroundColor  String   @default("#7c2d12")
+  stampIcon        String   @default("coffee")
+  terms            String?
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+}
+
+model LoyaltyCard {
+  id              String    @id @default(uuid())
+  restaurantId    String
+  // Random code: the card's address (/c/<code>) and the content of its QR.
+  code            String    @unique
+  name            String
+  phone           String
+  // Stamps not yet turned into a reward; a reward costs stampsRequired.
+  stamps          Int       @default(0)
+  totalStamps     Int       @default(0)
+  rewardsRedeemed Int       @default(0)
+  consentAt       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  lastStampAt     DateTime?
+
+  restaurant Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  events     LoyaltyEvent[]
+  bills      Bill[]
+
+  @@unique([restaurantId, phone])
+  @@index([restaurantId, createdAt])
+}
+
+enum LoyaltyEventType {
+  STAMP
+  REDEEM
+}
+
+model LoyaltyEvent {
+  id           String           @id @default(uuid())
+  cardId       String
+  restaurantId String
+  type         LoyaltyEventType
+  quantity     Int
+  // A bill stamps one card, once.
+  billId       String?          @unique
+  actor        String?
+  createdAt    DateTime         @default(now())
+
+  card LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, createdAt])
+  @@index([cardId, createdAt])
+}
+
+// Stock and anti-waste (S-01…S-04). A batch is one delivery or one day's
+// production, with an optional "sell by" time; sales take from the batch that
+// expires first.
+model StockBatch {
+  id           String    @id @default(uuid())
+  restaurantId String
+  dishId       String
+  quantity     Int
+  remaining    Int
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  dish      Dish            @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  movements StockMovement[]
+
+  @@index([dishId, expiresAt])
+  @@index([restaurantId, expiresAt])
+}
+
+enum StockMovementType {
+  RESTOCK
+  SALE
+  RETURN
+  WASTE
+  ADJUST
+}
+
+// Every change of stock, signed: + in, − out.
+model StockMovement {
+  id           String            @id @default(uuid())
+  restaurantId String
+  dishId       String
+  batchId      String?
+  type         StockMovementType
+  quantity     Int
+  reason       String?
+  actor        String?
+  orderId      String?
+  createdAt    DateTime          @default(now())
+
+  dish  Dish        @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  batch StockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId, createdAt])
+  @@index([dishId, createdAt])
+  @@index([orderId])
 }

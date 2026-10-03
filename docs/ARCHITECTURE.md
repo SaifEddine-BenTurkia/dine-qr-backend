@@ -3,7 +3,7 @@
 How TableQR is built and deployed today. Keep it current: update the sections a feature touches in
 the same pull request. `DISCOVERY.md` is the dated audit of 2026-10-02 and is not updated.
 
-Last updated: 2026-10-03 (ADM-02 admin security).
+Last updated: 2026-10-03 (packs, push, loyalty, stock).
 
 ## 1. Overview
 
@@ -52,6 +52,10 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 - Admins create restaurant accounts in the console (`POST /admin/accounts`).
 - Staff roles inside a restaurant (manager, waiter) are P0-11.
 
+Packs (P0-03): `effectivePlan()` gives the pack that applies (everything during the trial, the
+paid pack afterwards); `EntitlementsService.require(restaurantId, feature)` guards every premium
+route and answers `403 PLAN_REQUIRED` with the pack to upgrade to.
+
 ## 4. Backend modules (`src/`)
 
 | Module | Routes | Notes |
@@ -67,6 +71,10 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 | `admin` | `/admin/*` | Overview, activity, system, accounts, payments |
 | `staff` | `/staff`, `/staff-auth/*` | Team (owner) and PIN sign-in (staff) |
 | `orders` | `/orders/*`, `/public/menu/:slug/orders` | Table orders, caisse, bills, Z report |
+| `push` | `/push/*` | Web push subscriptions; `PushService` (global) notifies devices by role |
+| `loyalty` | `/loyalty/*`, `/public/loyalty/*` | Stamp cards, program, Google Wallet service |
+| `stock` | `/stock/*` | Batches, movements, expiry sweep, suggestions, promo prices |
+| `billing` (plans) | — | `plan-catalog.ts`, `EntitlementsService` (global): what each pack includes |
 | `ai` | `/ai/*` | Menu import and translation through OpenRouter |
 | `media` | `/library/*`, image uploads | Cloudinary |
 | `mail` | — | Resend; `RecipientPolicy` limits recipients outside production |
@@ -94,9 +102,12 @@ container today; with several, `ServiceHub` becomes a PostgreSQL LISTEN/NOTIFY b
 | `Scan` | Menu opens with a salted visitor hash (to be replaced by `Event`, P0-06) |
 | `Subscription`, `PaymentRequest` | Trial and cash payments |
 | `StaffMember` | Staff of a restaurant: role, PIN HMAC (unique per restaurant), tokenVersion |
-| `Order`, `OrderItem`, `Bill` | Orders (daily number, status, snapshot lines in millimes), bills (method, discount) |
+| `Order`, `OrderItem`, `Bill` | Orders (daily number, status, snapshot lines in millimes), bills (method, discount, loyalty card) |
+| `PlatformSetting`, `PushSubscription` | Server-generated settings (sealed push keys); devices to notify, by role |
+| `LoyaltyProgram`, `LoyaltyCard`, `LoyaltyEvent` | Stamp program and design; guest cards (code, phone unique per restaurant); stamps and rewards |
+| `StockBatch`, `StockMovement` | Stock per dish with sell-by time; signed ledger of every change |
 
-Migrations: `init`, `manual_cash_payments`, `menu_template`, `guest_service`, `ai_locales`, `admin_totp`.
+Migrations: `init`, `manual_cash_payments`, `menu_template`, `guest_service`, `ai_locales`, `admin_totp`, `money_millimes`, `ordering_staff`, `plans`, `push`, `loyalty`, `stock`.
 New migrations must be additive or come with a backfill; `deploy.sh` backs up before migrating.
 
 ## 6. Frontend layout (`dine-qr-style/src/`)
@@ -107,6 +118,11 @@ New migrations must be additive or come with a backfill; `deploy.sh` backs up be
 | `routes/m.$slug.tsx` | Guest menu (`?t=` table token, locale, tracker, 5 s refresh) |
 | `routes/_authenticated.tsx` + `routes/_authenticated/dashboard/*` | Restaurant dashboard: Accueil, Menu, Service, Tables, Avis, QR, Restaurant, Abonnement |
 | `routes/admin.tsx` + `routes/admin/*` | Admin console: Vue d'ensemble, Activité, Restaurants, Paiements, Système |
+| `routes/staff.tsx` + `routes/staff/*` | Staff app (PIN sign-in, the Caisse live screen); installable (`staff.webmanifest`) |
+| `routes/c.$code.tsx` | Guest loyalty card page |
+| `components/caisse/` | Live screen: orders, calls, payment, counter, loyalty lookup, closing, tickets |
+| `components/dashboard/sections.ts` | The list of owner screens used by the sidebar, phone menu and home |
+| `public/sw.js` | Service worker: shows push notifications; caches nothing |
 | `components/public-menu/` | Templates, guest bar, i18n strings (fr/ar/en, RTL), session tracker |
 | `lib/api.ts`, `lib/queries.ts`, `lib/auth-context.tsx` | API client and types, Query hooks, session |
 | `public/_headers` | Security headers and CSP (API origin filled in by `scripts/write-headers.mjs` after build) |
