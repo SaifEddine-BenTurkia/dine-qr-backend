@@ -1,3 +1,4 @@
+import { fromMillimes } from '../common/money';
 import type { Category, Dish, Prisma } from '@prisma/client';
 import type { Translations } from '../common/locales';
 
@@ -30,8 +31,9 @@ export function toDishView(dish: Dish) {
     descriptionI18n: translations(dish.descriptionI18n),
     // Translations made by AI and not yet checked ("IA", "à revoir").
     aiLocales: dish.aiLocales,
-    // Stored as an exact decimal; the client works with plain numbers.
-    price: dish.price.toNumber(),
+    // Stored in millimes; the API speaks dinars (number, up to 3 decimals).
+    price: fromMillimes(dish.priceMillimes),
+    priceMillimes: dish.priceMillimes,
     imageUrl: dish.imageUrl,
     position: dish.position,
     available: dish.available,

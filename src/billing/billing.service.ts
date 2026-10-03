@@ -16,6 +16,7 @@ import {
 import { randomInt } from 'node:crypto';
 import { AdminAccess } from '../common/admin';
 import { MailService } from '../mail/mail.service';
+import { fromMillimes, millimes } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { CURRENCY, parsePlans, type PaymentContact, type Plan } from './plans';
 import {
@@ -119,7 +120,7 @@ export class BillingService {
           reference: generateReference(),
           userId,
           months: plan.months,
-          amount: plan.amount,
+          amountMillimes: millimes(plan.amount),
           currency: CURRENCY,
           contactMethod: input.contactMethod,
           note: input.note || null,
@@ -169,7 +170,10 @@ export class BillingService {
     });
     return requests.map((request) => ({
       ...toRequestView(request),
-      amountReceived: request.amountReceived?.toNumber() ?? null,
+      amountReceived:
+        request.amountReceivedMillimes === null
+          ? null
+          : fromMillimes(request.amountReceivedMillimes),
       handledBy: request.handledBy,
       owner: {
         fullName: request.user.fullName,
@@ -207,7 +211,10 @@ export class BillingService {
         where: { id, status: 'PENDING' },
         data: {
           status: 'PAID',
-          amountReceived: input.amountReceived ?? request.amount,
+          amountReceivedMillimes:
+            input.amountReceived === undefined
+              ? request.amountMillimes
+              : millimes(input.amountReceived),
           adminNote: input.adminNote || null,
           handledBy: adminEmail,
           handledAt: now,
@@ -263,16 +270,17 @@ export class BillingService {
     });
     if (!user) throw new NotFoundException('Compte introuvable');
     const plan = this.plans.find((p) => p.months === input.months);
-    const amount =
-      plan?.amount ??
-      Math.round(this.pricePerMonth * input.months * 1000) / 1000;
+    const amountMillimes = plan
+      ? millimes(plan.amount)
+      : millimes(this.pricePerMonth) * input.months;
+    const amount = fromMillimes(amountMillimes);
 
     const request = await this.prisma.paymentRequest.create({
       data: {
         reference: generateReference(),
         userId,
         months: input.months,
-        amount,
+        amountMillimes,
         currency: CURRENCY,
         contactMethod: 'PHONE',
         note: 'Paiement enregistré par un administrateur',
@@ -386,7 +394,7 @@ function emailFields(request: PaymentRequest) {
   return {
     reference: request.reference,
     months: request.months,
-    amount: request.amount.toNumber(),
+    amount: fromMillimes(request.amountMillimes),
     currency: request.currency,
   };
 }
@@ -396,7 +404,7 @@ export function toRequestView(request: PaymentRequest) {
     id: request.id,
     reference: request.reference,
     months: request.months,
-    amount: request.amount.toNumber(),
+    amount: fromMillimes(request.amountMillimes),
     currency: request.currency,
     contactMethod: request.contactMethod,
     note: request.note,

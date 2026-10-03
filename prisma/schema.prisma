@@ -178,7 +178,8 @@ model Dish {
   categoryId      String
   name            String
   description     String?
-  price           Decimal   @db.Decimal(10, 3)
+  // Integer millimes (1 DT = 1000), never floats (P0-04).
+  priceMillimes   Int
   imageUrl        String?
   position        Int
   available       Boolean   @default(true)
@@ -240,12 +241,13 @@ model PaymentRequest {
   reference      String               @unique
   userId         String
   months         Int
-  amount         Decimal              @db.Decimal(10, 3)
+  // Integer millimes (P0-04).
+  amountMillimes Int
   currency       String               @default("TND")
   contactMethod  PaymentContactMethod
   note           String?
   status         PaymentRequestStatus @default(PENDING)
-  amountReceived Decimal?             @db.Decimal(10, 3)
+  amountReceivedMillimes Int?
   adminNote      String?
   handledBy      String?
   handledAt      DateTime?

@@ -464,7 +464,7 @@ async function main() {
             nameI18n: i18n(dish.name),
             description: dish.desc?.fr,
             descriptionI18n: dish.desc ? i18n(dish.desc) : undefined,
-            price: new Prisma.Decimal(dish.price),
+            priceMillimes: Math.round(dish.price * 1000),
             imageUrl: dish.img,
             position: dIndex,
           },

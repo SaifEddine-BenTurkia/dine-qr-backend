@@ -2,6 +2,13 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## P0-04 Money in millimes (2026-10-03)
+
+- Prices and payment amounts are stored as whole millimes; nothing changes on screen.
+- The dish price field accepts "4,5", "4.500", "4D500" and "4 DT".
+
+**Test manually:** edit a dish price to "4D500": the menu shows 4,500 DT.
+
 ## ADM-02 Admin console security (2026-10-03)
 
 - `/admin` is a 404 for everyone but a signed-in admin (browser and API).

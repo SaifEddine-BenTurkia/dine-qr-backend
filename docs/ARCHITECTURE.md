@@ -83,7 +83,7 @@ container today; with several, `ServiceHub` becomes a PostgreSQL LISTEN/NOTIFY b
 |---|---|
 | `User`, `UserToken` | Accounts; email verification and reset tokens (SHA-256 hashes only) |
 | `Restaurant` | One per restaurant account: profile, template, WiFi, Google Place ID, `defaultLocale`, `enabledLocales` |
-| `Category`, `Dish` | Menu; prices `Decimal(10,3)` in dinars (millimes migration is P0-04); `nameI18n`/`descriptionI18n` JSON, `aiLocales`; `soldOut`, `soldOutUntil` |
+| `Category`, `Dish` | Menu; prices in integer millimes (`priceMillimes`, P0-04); `nameI18n`/`descriptionI18n` JSON, `aiLocales`; `soldOut`, `soldOutUntil` |
 | `DiningTable` | Label, zone, unique random token for `?t=` |
 | `ServiceRequest` | WAITER / BILL_CASH / BILL_CARD; OPEN → ACKNOWLEDGED → DONE (or CANCELLED) |
 | `Event` | Guest and server events for analytics (type, table, session, item, props) |

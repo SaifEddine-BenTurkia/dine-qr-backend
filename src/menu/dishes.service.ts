@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { nextTunisFiveAm } from '../common/locales';
 import { MediaService } from '../media/media.service';
+import { millimes } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { RestaurantAccessService } from '../restaurant/restaurant-access.service';
 import type { CreateDishDto, UpdateDishDto } from './menu.dto';
@@ -41,7 +42,7 @@ export class DishesService {
         categoryId: input.categoryId,
         name: input.name,
         description: input.description,
-        price: input.price,
+        priceMillimes: millimes(input.price),
         imageUrl: input.imageUrl,
         available: input.available ?? true,
         nameI18n: input.nameI18n ?? Prisma.DbNull,
@@ -58,9 +59,11 @@ export class DishesService {
     if (input.categoryId) {
       await this.assertCategoryOwned(restaurantId, input.categoryId);
     }
-    const { soldOut, soldOutMode, nameI18n, descriptionI18n, ...rest } = input;
+    const { soldOut, soldOutMode, nameI18n, descriptionI18n, price, ...rest } =
+      input;
     const data: Prisma.DishUpdateInput = {
       ...rest,
+      ...(price !== undefined && { priceMillimes: millimes(price) }),
       ...(nameI18n !== undefined && { nameI18n: nameI18n ?? Prisma.DbNull }),
       ...(descriptionI18n !== undefined && {
         descriptionI18n: descriptionI18n ?? Prisma.DbNull,
