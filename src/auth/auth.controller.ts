@@ -20,6 +20,7 @@ import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  TotpCodeDto,
   VerifyEmailQueryDto,
 } from './auth.dto';
 import { AuthService } from './auth.service';
@@ -50,7 +51,26 @@ export class AuthController {
   @AllowUnverifiedEmail()
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
-    return this.auth.me(user.id);
+    return this.auth.me(user.id, user.mfa);
+  }
+
+  // Admin second factor. Hidden (404) from every other account.
+  @Throttle(STRICT)
+  @UseGuards(JwtAuthGuard)
+  @ForRole('admin')
+  @HttpCode(200)
+  @Post('admin-mfa/setup')
+  adminMfaSetup(@CurrentUser() user: AuthUser) {
+    return this.auth.adminMfaSetup(user.id);
+  }
+
+  @Throttle(STRICT)
+  @UseGuards(JwtAuthGuard)
+  @ForRole('admin')
+  @HttpCode(200)
+  @Post('admin-mfa/verify')
+  adminMfaVerify(@CurrentUser() user: AuthUser, @Body() body: TotpCodeDto) {
+    return this.auth.adminMfaVerify(user.id, body.code);
   }
 
   @Throttle(STRICT)

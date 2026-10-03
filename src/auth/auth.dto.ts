@@ -107,3 +107,11 @@ export class ResetPasswordDto {
   @MaxLength(72)
   password: string;
 }
+
+export class TotpCodeDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.replace(/\s/g, '') : value,
+  )
+  @Matches(/^\d{6}$/, { message: 'Le code fait 6 chiffres' })
+  code: string;
+}

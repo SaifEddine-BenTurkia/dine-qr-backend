@@ -281,8 +281,8 @@ describe('Guest service (e2e)', () => {
   });
 
   it('shows platform activity and system state to the admin only', async () => {
-    await http().get('/admin/activity').set(as(0)).expect(403);
-    await http().get('/admin/system').set(as(0)).expect(403);
+    await http().get('/admin/activity').set(as(0)).expect(404);
+    await http().get('/admin/system').set(as(0)).expect(404);
 
     await prisma.user.deleteMany({ where: { email: 'svc-admin@example.com' } });
     const admin = await prisma.user.create({
@@ -294,7 +294,7 @@ describe('Guest service (e2e)', () => {
       },
     });
     const asAdmin = {
-      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0 })}`,
+      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0, mfa: true })}`,
     };
 
     const res = await http()
@@ -332,7 +332,7 @@ describe('Guest service (e2e)', () => {
       where: { email: 'svc-admin@example.com' },
     });
     const asAdmin = {
-      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0 })}`,
+      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0, mfa: true })}`,
     };
 
     const me = await http().get('/auth/me').set(asAdmin).expect(200);
@@ -349,8 +349,9 @@ describe('Guest service (e2e)', () => {
       .send({ name: 'Admin resto', slug: `adm-${randomUUID().slice(0, 8)}` })
       .expect(403);
     // A restaurant account cannot use the console.
-    await http().get('/admin/overview').set(as(0)).expect(403);
-    await http().get('/admin/payment-requests').set(as(0)).expect(403);
+    await http().get('/admin/overview').set(as(0)).expect(404);
+    await http().get('/admin/payment-requests').set(as(0)).expect(404);
+    await http().post('/auth/admin-mfa/setup').set(as(0)).expect(404);
   });
 
   it('opens a restaurant account and moves a restaurant off an admin account', async () => {
@@ -358,7 +359,7 @@ describe('Guest service (e2e)', () => {
       where: { email: 'svc-admin@example.com' },
     });
     const asAdmin = {
-      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0 })}`,
+      Authorization: `Bearer ${await app.get(JwtService).signAsync({ sub: admin.id, ver: 0, mfa: true })}`,
     };
     // A restaurant set up under the admin account before roles existed.
     const slug = `adm-${randomUUID().slice(0, 8)}`;

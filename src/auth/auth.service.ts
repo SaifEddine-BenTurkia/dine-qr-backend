@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, UserTokenType, type User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -15,6 +17,18 @@ import type { JwtPayload } from '../common/auth.guard';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { LoginDto, RegisterDto } from './auth.dto';
+import {
+  matchTotp,
+  newTotpSecret,
+  openSecret,
+  otpauthUrl,
+  sealSecret,
+} from './totp';
+
+// Admin sessions: a short one until the authenticator code is given, then a
+// working session that ends after 8 hours.
+const ADMIN_PENDING_TTL = '15m';
+const ADMIN_SESSION_TTL = '8h';
 
 export const BCRYPT_ROUNDS = 12;
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -43,7 +57,65 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly mail: MailService,
     private readonly admins: AdminAccess,
+    private readonly config: ConfigService,
   ) {}
+
+  private get sealKey() {
+    return this.config.getOrThrow<string>('JWT_SECRET');
+  }
+
+  /** First step for an admin without a second factor: a new secret to scan. */
+  async adminMfaSetup(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    if (user.totpEnabledAt) {
+      throw new ConflictException(
+        'La double vérification est déjà active sur ce compte',
+      );
+    }
+    const secret = newTotpSecret();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totpSecret: sealSecret(secret, this.sealKey) },
+    });
+    return {
+      secret,
+      otpauthUrl: otpauthUrl(secret, user.email, 'TableQR admin'),
+    };
+  }
+
+  /**
+   * Checks an authenticator code: turns the second factor on the first time,
+   * and returns an admin session valid for 8 hours. A code works only once.
+   */
+  async adminMfaVerify(userId: string, code: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    if (!user.totpSecret) {
+      throw new BadRequestException(
+        "Configurez d'abord la double vérification",
+      );
+    }
+    const step = matchTotp(openSecret(user.totpSecret, this.sealKey), code);
+    if (
+      step === null ||
+      (user.lastTotpStep !== null && step <= user.lastTotpStep)
+    ) {
+      this.logger.warn(`Admin second factor refused for user ${user.id}`);
+      throw new ForbiddenException('Code incorrect ou expiré');
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        lastTotpStep: step,
+        totpEnabledAt: user.totpEnabledAt ?? new Date(),
+      },
+    });
+    this.logger.log(`Admin session opened for user ${user.id}`);
+    return { token: await this.issueToken(updated, { mfa: true }) };
+  }
 
   async register(input: RegisterDto) {
     const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
@@ -89,7 +161,7 @@ export class AuthService {
     return { token: await this.issueToken(user), user: toPublicUser(user) };
   }
 
-  async me(userId: string) {
+  async me(userId: string, mfaVerified = false) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException();
     // Only here, not in login/register: the dashboard reads it from /auth/me.
@@ -98,6 +170,9 @@ export class AuthService {
       ...toPublicUser(user),
       role: isAdmin ? 'admin' : 'restaurant',
       isAdmin,
+      ...(isAdmin && {
+        mfa: { enabled: user.totpEnabledAt !== null, verified: mfaVerified },
+      }),
     };
   }
 
@@ -161,8 +236,17 @@ export class AuthService {
     return { message: 'Mot de passe mis à jour' };
   }
 
-  private issueToken(user: User) {
+  private issueToken(user: User, options: { mfa?: boolean } = {}) {
     const payload: JwtPayload = { sub: user.id, ver: user.tokenVersion };
+    if (options.mfa) {
+      return this.jwt.signAsync(
+        { ...payload, mfa: true },
+        { expiresIn: ADMIN_SESSION_TTL },
+      );
+    }
+    if (this.admins.isAdmin(user.email)) {
+      return this.jwt.signAsync(payload, { expiresIn: ADMIN_PENDING_TTL });
+    }
     return this.jwt.signAsync(payload);
   }
 

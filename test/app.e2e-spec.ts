@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { currentStep, totpCode } from '../src/auth/totp';
 import { configureApp } from '../src/app.setup';
 import { MailService } from '../src/mail/mail.service';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -295,8 +296,9 @@ describe('TableQR API (e2e)', () => {
       .expect(400);
     const trialEndsAt = new Date(sub.body.trialEndsAt);
 
-    // Owners cannot reach the admin queue.
-    await http().get('/admin/payment-requests').set(authed()).expect(403);
+    // Owners cannot reach the admin queue: it does not exist for them.
+    await http().get('/admin/payment-requests').set(authed()).expect(404);
+    await http().get('/admin/payment-requests').expect(404);
 
     const admin = await http()
       .post('/auth/register')
@@ -309,9 +311,51 @@ describe('TableQR API (e2e)', () => {
     await http()
       .get(`/auth/verify-email?token=${mail.verification.get(ADMIN_EMAIL)}`)
       .expect(200);
-    const asAdmin = { Authorization: `Bearer ${admin.body.token}` };
-    const me = await http().get('/auth/me').set(asAdmin).expect(200);
-    expect(me.body.isAdmin).toBe(true);
+    const pending = { Authorization: `Bearer ${admin.body.token}` };
+    const me = await http().get('/auth/me').set(pending).expect(200);
+    expect(me.body).toMatchObject({
+      isAdmin: true,
+      mfa: { enabled: false, verified: false },
+    });
+
+    // The console needs the authenticator code first.
+    const blocked = await http()
+      .get('/admin/payment-requests')
+      .set(pending)
+      .expect(403);
+    expect(blocked.body.code).toBe('MFA_REQUIRED');
+    const setup = await http()
+      .post('/auth/admin-mfa/setup')
+      .set(pending)
+      .expect(200);
+    expect(setup.body.otpauthUrl).toContain('otpauth://totp/');
+    await http()
+      .post('/auth/admin-mfa/verify')
+      .set(pending)
+      .send({
+        code:
+          '000000' === totpCode(setup.body.secret, currentStep())
+            ? '111111'
+            : '000000',
+      })
+      .expect(403);
+    const code = totpCode(setup.body.secret, currentStep());
+    const verified = await http()
+      .post('/auth/admin-mfa/verify')
+      .set(pending)
+      .send({ code })
+      .expect(200);
+    // A code works once.
+    await http()
+      .post('/auth/admin-mfa/verify')
+      .set(pending)
+      .send({ code })
+      .expect(403);
+    // Setting up again is refused once it is on.
+    await http().post('/auth/admin-mfa/setup').set(pending).expect(409);
+    const asAdmin = { Authorization: `Bearer ${verified.body.token}` };
+    const after = await http().get('/auth/me').set(asAdmin).expect(200);
+    expect(after.body.mfa).toEqual({ enabled: true, verified: true });
 
     const queue = await http()
       .get('/admin/payment-requests?status=PENDING')
@@ -359,7 +403,7 @@ describe('TableQR API (e2e)', () => {
       .expect(200);
     expect(overview.body.revenue.total).toBeGreaterThanOrEqual(490);
     expect(overview.body.pricing.plans).toHaveLength(2);
-    await http().get('/admin/overview').set(authed()).expect(403);
+    await http().get('/admin/overview').set(authed()).expect(404);
 
     const accounts = await http()
       .get(`/admin/accounts?search=${encodeURIComponent(email)}`)
