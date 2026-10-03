@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
   createParamDecorator,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { StaffRole } from '@prisma/client';
@@ -72,6 +73,21 @@ export const StaffRoles = (...roles: StaffRole[]) =>
 /** Lets a signed-in user whose email is not yet verified reach this route. */
 export const AllowUnverifiedEmail = () => SetMetadata(ALLOW_UNVERIFIED, true);
 
+/**
+ * Sign-up is open: a restaurant account works as soon as it is created and
+ * confirms its email later. Admin rights come from the email address
+ * (ADMIN_EMAILS), so an admin account must prove it owns the address first.
+ * REQUIRE_EMAIL_VERIFICATION=true brings back the strict rule for everyone.
+ */
+export function mustVerifyEmail(input: {
+  verified: boolean;
+  role: AccountRole;
+  strict: boolean;
+}) {
+  if (input.verified) return false;
+  return input.role === 'admin' || input.strict;
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -79,6 +95,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
     private readonly admins: AdminAccess,
+    private readonly config: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -143,17 +160,25 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Session expirée, reconnectez-vous');
     }
 
+    const role: AccountRole = this.admins.isAdmin(user.email)
+      ? 'admin'
+      : 'restaurant';
+
     const allowUnverified = this.reflector.getAllAndOverride<boolean>(
       ALLOW_UNVERIFIED,
       [context.getHandler(), context.getClass()],
     );
-    if (!user.emailVerifiedAt && !allowUnverified) {
+    if (
+      !allowUnverified &&
+      mustVerifyEmail({
+        verified: user.emailVerifiedAt !== null,
+        role,
+        strict:
+          this.config.get<string>('REQUIRE_EMAIL_VERIFICATION') === 'true',
+      })
+    ) {
       throw new ForbiddenException('Veuillez vérifier votre adresse email');
     }
-
-    const role: AccountRole = this.admins.isAdmin(user.email)
-      ? 'admin'
-      : 'restaurant';
     if (!allowed.includes('any') && !allowed.includes(role)) {
       throw new ForbiddenException(
         role === 'admin'

@@ -42,7 +42,9 @@ Outside services: Resend (email), Cloudinary (images), OpenRouter (AI).
 | guest | Anonymous visitor | `/m/:slug` | `/public/menu/*` (rate limited) |
 
 - `JwtAuthGuard` (`src/common/auth.guard.ts`) reloads the user on every request (token version for
-  revocation, email verified), computes the role and enforces `@ForRole`. `AdminGuard` checks again
+  revocation), computes the role and enforces `@ForRole`. Sign-up is open (UX-03): a restaurant
+  account works before its email is confirmed; an admin account must confirm first
+  (`mustVerifyEmail`); `REQUIRE_EMAIL_VERIFICATION=true` makes it mandatory for everyone. `AdminGuard` checks again
   on admin controllers.
 - Admin console security (ADM-02): admin routes answer 404 to everyone but an admin; admins need
   a TOTP code after the password (15-minute pending session, then 8-hour session with `mfa: true`

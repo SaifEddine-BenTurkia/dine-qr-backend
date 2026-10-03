@@ -2,6 +2,17 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## UX-03 Professional landing page, open sign-up (2026-10-03)
+
+- **menu.arishub.site** has a new home page in the style of the app: the caisse and the guest's
+  phone in the hero, the service flow in four steps, features for guests, team and owner, packs,
+  FAQ.
+- **Anyone can create an account and use it at once.** The email is confirmed later; admin
+  accounts still have to confirm theirs first.
+
+**Test manually:** in a private window, open menu.arishub.site → "Créer un compte" with a new
+email → you land in the dashboard and can create a restaurant. Your admin account: unchanged.
+
 ## UX-02 Professional look, full-screen caisse (2026-10-03)
 
 - Calmer, more professional screens: neutral colours, sharper cards, a top bar with "Voir mon

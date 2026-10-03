@@ -92,7 +92,7 @@ describe('TableQR API (e2e)', () => {
     await http().get('/health/ready').expect(200);
   });
 
-  it('registers, then blocks the dashboard until the email is verified', async () => {
+  it('registers and opens the dashboard at once; the email link still confirms it', async () => {
     const res = await http()
       .post('/auth/register')
       .send({
@@ -105,8 +105,11 @@ describe('TableQR API (e2e)', () => {
     token = res.body.token;
     expect(res.body.user).toMatchObject({ email, emailVerified: false });
 
-    await http().get('/auth/me').set(authed()).expect(200);
-    await http().get('/restaurant').set(authed()).expect(403);
+    const me = await http().get('/auth/me').set(authed()).expect(200);
+    expect(me.body).toMatchObject({ emailVerified: false, role: 'restaurant' });
+    expect(typeof me.body.emailDelivery).toBe('boolean');
+    // Open sign-up: no waiting for the email before using the dashboard.
+    await http().get('/restaurant').set(authed()).expect(200);
 
     await http()
       .get(`/auth/verify-email?token=${mail.verification.get(email)}`)
@@ -308,6 +311,18 @@ describe('TableQR API (e2e)', () => {
         fullName: 'Admin',
       })
       .expect(201);
+    // Sign-up is open, and an address in ADMIN_EMAILS is what makes an admin:
+    // until that address is confirmed the account gets nothing.
+    const unconfirmed = { Authorization: `Bearer ${admin.body.token}` };
+    // The console stays hidden and the second factor cannot be set up.
+    await http().get('/admin/payment-requests').set(unconfirmed).expect(404);
+    await http().post('/auth/admin-mfa/setup').set(unconfirmed).expect(404);
+    const refused = await http()
+      .get('/restaurant')
+      .set(unconfirmed)
+      .expect(403);
+    expect(refused.body.message).toBe('Veuillez vérifier votre adresse email');
+
     await http()
       .get(`/auth/verify-email?token=${mail.verification.get(ADMIN_EMAIL)}`)
       .expect(200);
