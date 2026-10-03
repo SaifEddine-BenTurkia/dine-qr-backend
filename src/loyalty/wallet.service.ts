@@ -86,6 +86,8 @@ export class GoogleWalletService {
   private token: { value: string; expiresAt: number } | null = null;
   // Designs already registered with Google, by class id.
   private readonly classes = new Map<string, string>();
+  // What Google answered last time a design was refused (admin check).
+  private lastError: string | null = null;
 
   constructor(
     config: ConfigService,
@@ -228,13 +230,75 @@ export class GoogleWalletService {
       }
       if (res.status < 300) {
         this.classes.set(loyaltyClass.id, body);
+        this.lastError = null;
         return true;
       }
+      const answer = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      this.lastError = `${res.status} ${answer?.error?.message ?? ''}`.trim();
       this.logger.warn(`Google Wallet answered ${res.status} on a card design`);
     } catch (error) {
+      this.lastError = String(error);
       this.logger.warn(`Google Wallet design update failed: ${String(error)}`);
     }
     return false;
+  }
+
+  /**
+   * Admin check after the setup (Console → Système): signs in to Google,
+   * registers a sample design and returns a pass the admin can save on their
+   * own phone. In demo mode only the issuer's users and test accounts can.
+   */
+  async testPass(): Promise<{
+    ok: boolean;
+    detail: string;
+    saveUrl: string | null;
+  }> {
+    if (!this.configured) {
+      return {
+        ok: false,
+        detail:
+          'GOOGLE_WALLET_ISSUER_ID ou GOOGLE_WALLET_SERVICE_ACCOUNT manquant ou illisible sur le serveur.',
+        saveUrl: null,
+      };
+    }
+    try {
+      await this.accessToken();
+    } catch (error) {
+      return {
+        ok: false,
+        detail: `Google refuse la clé du compte de service (${String(error)}).`,
+        saveUrl: null,
+      };
+    }
+    const program: WalletProgram = {
+      restaurantId: 'admin-test',
+      restaurantName: 'TableQR',
+      logoUrl: null,
+      cardTitle: 'Carte de test',
+      backgroundColor: '#b85433',
+      stampsRequired: 9,
+      rewardText: 'Carte de test de la console',
+      cardUrl: this.site || 'https://pay.google.com',
+    };
+    const designOk = await this.ensureClass(program);
+    const saveUrl = await this.saveUrl(
+      { code: `admintest${Date.now().toString(36)}`, name: 'Test', stamps: 3 },
+      program,
+    );
+    return designOk
+      ? {
+          ok: true,
+          detail:
+            'Connexion et design acceptés par Google. Ouvrez le lien pour enregistrer la carte de test.',
+          saveUrl,
+        }
+      : {
+          ok: false,
+          detail: `Google a refusé le design : ${this.lastError ?? 'sans détail'}. Vérifiez que le compte de service est invité comme Développeur dans la console Google Pay & Wallet.`,
+          saveUrl,
+        };
   }
 
   /**

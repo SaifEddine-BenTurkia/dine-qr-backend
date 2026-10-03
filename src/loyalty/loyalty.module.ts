@@ -21,6 +21,6 @@ const realFetch: WalletFetch = (url, init) =>
     GoogleWalletService,
     LoyaltyService,
   ],
-  exports: [LoyaltyService],
+  exports: [LoyaltyService, GoogleWalletService],
 })
 export class LoyaltyModule {}

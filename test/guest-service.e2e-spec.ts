@@ -325,6 +325,37 @@ describe('Guest service (e2e)', () => {
       integrations: { ai: expect.any(Boolean) },
     });
     expect(JSON.stringify(system.body)).not.toMatch(/sk-|re_|secret/i);
+    expect(system.body).toMatchObject({
+      email: {
+        configured: false,
+        accountEmails: 'open',
+        sender: expect.any(String),
+      },
+      googleWallet: { configured: false },
+    });
+
+    // The two checks of the console: admin only, and plain answers.
+    await http().post('/admin/system/test-email').set(as(0)).expect(404);
+    await http().post('/admin/system/test-wallet').set(as(0)).expect(404);
+    const email = await http()
+      .post('/admin/system/test-email')
+      .set(asAdmin)
+      .send({})
+      .expect(200);
+    expect(email.body).toEqual({
+      ok: false,
+      detail: expect.stringContaining('RESEND_API_KEY'),
+    });
+    await http()
+      .post('/admin/system/test-email')
+      .set(asAdmin)
+      .send({ to: 'not-an-email' })
+      .expect(400);
+    const wallet = await http()
+      .post('/admin/system/test-wallet')
+      .set(asAdmin)
+      .expect(200);
+    expect(wallet.body).toMatchObject({ ok: false, saveUrl: null });
   });
 
   it('keeps admin and restaurant accounts apart', async () => {

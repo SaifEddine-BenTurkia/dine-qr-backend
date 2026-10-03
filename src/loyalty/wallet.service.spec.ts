@@ -176,6 +176,54 @@ describe('GoogleWalletService', () => {
   });
 });
 
+describe('GoogleWalletService.testPass (Console → Système)', () => {
+  it('explains what is missing when Wallet is not set up', async () => {
+    const { service, calls } = setup({ FRONTEND_URL: 'https://menu.example' });
+    const result = await service.testPass();
+    expect(result).toMatchObject({ ok: false, saveUrl: null });
+    expect(result.detail).toContain('GOOGLE_WALLET_ISSUER_ID');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('signs in, registers a sample design and returns a pass to save', async () => {
+    const { service, calls } = setup(configured);
+    const result = await service.testPass();
+    expect(result.ok).toBe(true);
+    expect(result.saveUrl).toMatch(
+      /^https:\/\/pay\.google\.com\/gp\/v\/save\//,
+    );
+    expect(calls.map((c) => c.method)).toEqual(['POST', 'POST']);
+  });
+
+  it("returns Google's reason when the design is refused", async () => {
+    const fetcher: WalletFetch = (url) =>
+      Promise.resolve(
+        url.includes('oauth2')
+          ? { status: 200, json: () => Promise.resolve({ access_token: 't' }) }
+          : {
+              status: 403,
+              json: () =>
+                Promise.resolve({
+                  error: { message: 'The caller does not have permission' },
+                }),
+            },
+      );
+    const service = new GoogleWalletService(config(configured), fetcher);
+    const result = await service.testPass();
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('403 The caller does not have permission');
+  });
+
+  it('reports a key Google refuses', async () => {
+    const fetcher: WalletFetch = () =>
+      Promise.resolve({ status: 400, json: () => Promise.resolve({}) });
+    const service = new GoogleWalletService(config(configured), fetcher);
+    const result = await service.testPass();
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('clé du compte de service');
+  });
+});
+
 describe('helpers', () => {
   it('shows progress and rewards waiting', () => {
     expect(stampBalance(4, 9)).toBe('4 / 9');

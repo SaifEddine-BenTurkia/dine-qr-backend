@@ -2,6 +2,19 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## EM-01 Account emails for everyone, Google Wallet ready (2026-10-03)
+
+- **Email confirmation and password reset are sent to every account** (other emails still wait
+  for launch). New layout in the app's style, with a text version.
+- **Google Wallet:** Google's official "Ajouter à Google Wallet" button on the guest's card, in
+  their language. It appears as soon as the issuer account is set on the server (QUESTIONS Q10).
+- **Console → Système:** "Envoyer un email de test" and "Tester Google Wallet" say exactly what
+  works and what is missing.
+
+**Test manually:** after QUESTIONS Q8, Console → Système → test email to a friend's address. Then
+create an account with that address: the confirmation arrives; "Mot de passe oublié" sends the
+reset link. After Q10: "Tester Google Wallet" → save the test card on your phone.
+
 ## UX-03 Professional landing page, open sign-up (2026-10-03)
 
 - **menu.arishub.site** has a new home page in the style of the app: the caisse and the guest's

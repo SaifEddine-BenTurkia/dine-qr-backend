@@ -3,6 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { AiService } from '../ai/ai.service';
 import { resolveAppEnv } from '../config/app-env';
+import { GoogleWalletService } from '../loyalty/wallet.service';
+import { DEFAULT_SENDER } from '../mail/mail.service';
+import { RecipientPolicy } from '../mail/recipient-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import { ServiceHub } from '../service/service-hub';
 
@@ -21,6 +24,8 @@ export class AdminActivityService {
     private readonly hub: ServiceHub,
     private readonly ai: AiService,
     private readonly config: ConfigService,
+    private readonly wallet: GoogleWalletService,
+    private readonly recipients: RecipientPolicy,
   ) {}
 
   async activity(days: number) {
@@ -265,6 +270,14 @@ export class AdminActivityService {
         email: has('RESEND_API_KEY'),
         images: has('CLOUDINARY_CLOUD_NAME'),
       },
+      email: {
+        configured: has('RESEND_API_KEY'),
+        sender: this.config.get<string>('RESEND_FROM_EMAIL') ?? DEFAULT_SENDER,
+        // Confirmation and password reset reach every owner; other emails
+        // follow the prelaunch allowlist.
+        accountEmails: this.recipients.accountEmailsOpen ? 'open' : 'allowlist',
+      },
+      googleWallet: { configured: this.wallet.configured },
       counts: { users, restaurants, events },
       lastEventAt: lastEvent?.occurredAt ?? null,
     };

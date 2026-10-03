@@ -73,34 +73,53 @@ locations. That deletes data on the server, which needs your approval.
 real customers arrive: your pitch restaurant is there); (b) tell me which production restaurants
 may be deleted, and I will prepare a one-off script for you to run.
 
-### Q8. When should emails go to every restaurant owner? (2026-10-03, updated)
-**Why:** before launch the server only emails the addresses in `ADMIN_EMAILS` (assumption A1).
-Since UX-03 new owners can use their account without the link, but they still receive no
-confirmation and **no password reset email**. Workaround: Console → Restaurants → account
-("Valider l'email"); for a forgotten password, ask me for an admin reset button if it happens.
-**To open emails to everyone (your decision, on the server):** first rotate the Resend key (Q1),
-then in the server's TableQR env file (in `/opt/tableqr`) either set `APP_ENV=production` (live
-mode: only after the first paying customer) or keep prelaunch and list the owners' addresses in
-`SANDBOX_ALLOWED_RECIPIENTS` (comma-separated); then redeploy (re-run the last CI/CD run on main).
+### Q8. Make sure account emails reach every inbox (2026-10-03, updated for EM-01)
+**Status:** the code now sends the confirmation and password reset emails to every account.
+Whether they arrive depends on the Resend sender, which only you can set.
+**Steps:**
+1. Rotate the Resend key first (Q1): the old one leaked.
+2. Resend (resend.com) → **Domains** → Add domain, for example `arishub.site` (or a sub-domain
+   such as `mail.arishub.site`). Add the DNS records Resend shows (SPF, DKIM, and the MX for
+   bounces) in Cloudflare → DNS for that domain. Wait until Resend shows **Verified**.
+3. On the server, in the TableQR env file: `RESEND_API_KEY=<the new key>` and
+   `RESEND_FROM_EMAIL=TableQR <no-reply@arishub.site>` (an address on the verified domain). Then
+   redeploy: GitHub → dine-qr-backend → Actions → last "CI/CD" run on main → Re-run all jobs.
+4. Console → **Système** → "Envoyer un email de test" to an address that is **not** yours (a
+   friend's, or a second mailbox). "Accepté par Resend" and the email in that inbox: done. An error
+   such as "domain is not verified" or "You can only send testing emails to your own email address"
+   means step 2 or 3 is not finished.
+Until then, the dashboard keeps working for new owners; for a forgotten password they need you.
 
 ### Q9. A thermal printer to test tickets (2026-10-03)
 **Why:** tickets are built for 80/58 mm thermal printers and checked in print preview; a real
 printer check is still needed. **What:** one 80 mm USB thermal printer (ESC/POS, e.g. Xprinter
 XP-80, around 150–250 DT). Setup steps are in docs/features/O-03-printing.md.
 
-### Q10. Google Wallet issuer account (2026-10-03)
-**Why:** loyalty cards can be added to Google Wallet only with an issuer account in your name.
-Until then guests use the web card (same stamps, same QR code).
-**Steps:**
-1. https://pay.google.com/business/console → "Google Wallet API" → create the issuer account
-   (free). Note the **Issuer ID**.
-2. https://console.cloud.google.com → a project → enable "Google Wallet API" → IAM → Service
-   accounts → create one → Keys → add a JSON key (downloads a file).
-3. In the Wallet console → Users → invite the service account's email as **Developer**.
-4. On the server, in the TableQR env file: `GOOGLE_WALLET_ISSUER_ID=<the ID>` and
-   `GOOGLE_WALLET_SERVICE_ACCOUNT=<the JSON file encoded in base64 on one line>`
-   (`base64 -w0 key.json`), then redeploy. The account starts in demo mode: only test users you add
-   in the console can save passes, until Google approves it for everyone.
+### Q10. Google Wallet: issuer account and key (2026-10-03, updated for EM-01)
+**Why:** "Ajouter à Google Wallet" needs an issuer account and a service account key in your
+name. Everything else is built; the button appears on every guest's card as soon as both values
+are on the server. Until then guests use the web card (same stamps, same QR code).
+**Steps (about 20 minutes, free):**
+1. https://pay.google.com/business/console → sign in with the Google account that will own it →
+   **Google Wallet API** → create the issuer account (business name "TableQR", country Tunisia,
+   your contact email). Copy the **Issuer ID** (a long number).
+2. https://console.cloud.google.com → create a project "tableqr" → APIs & Services → Library →
+   enable **Google Wallet API**.
+3. Same project → IAM & Admin → **Service accounts** → Create ("tableqr-wallet", no role needed)
+   → open it → Keys → Add key → **JSON**. A file downloads: keep it private, never in git.
+4. Back in the Wallet console → **Users** → Invite user → the service account's email (ends in
+   `iam.gserviceaccount.com`) → role **Developer**.
+5. Encode the key on one line: in Git Bash `base64 -w0 key.json`, or in PowerShell
+   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("key.json"))`.
+6. On the server, in the TableQR env file: `GOOGLE_WALLET_ISSUER_ID=<the Issuer ID>` and
+   `GOOGLE_WALLET_SERVICE_ACCOUNT=<the one-line base64>`. Redeploy (re-run the last CI/CD run on
+   main).
+7. Console → **Système** → "Tester Google Wallet" → "Ajouter à Google Wallet": the test card
+   should appear on your phone (marked [TEST ONLY] while in demo mode).
+8. Demo mode: only you, your console users and the test accounts you add (Wallet console → Test
+   accounts) can save passes. To open it to every guest: Wallet console → Google Wallet API →
+   **Request publishing access** (business profile and a payments profile are asked; Google
+   reviews the request). Once approved, "[TEST ONLY]" disappears and every guest can save the card.
 
 ### Q11. Check notifications on real phones (2026-10-03)
 **Why:** push delivery depends on the phone and cannot be tested from here.
@@ -146,4 +165,7 @@ adviser:** declare the processing before real customers join; the consent text i
   rule. Emails stay in prelaunch mode (hard limit): opening them is still Q8.
 - **A15.** No per-account AI quota yet: AI import and translation are limited per IP address and by
   the capped OpenRouter key. A per-account daily quota comes with the first sign of abuse.
+- **A16.** Confirmation and password reset emails go to every account before launch (owner
+  request, EM-01); they are sent only to the address the person typed, at their request, and are
+  rate limited. Other emails keep the prelaunch allowlist. `ACCOUNT_EMAILS=allowlist` reverts it.
 

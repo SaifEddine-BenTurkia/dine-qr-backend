@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEmail,
@@ -32,6 +33,8 @@ import {
   JwtAuthGuard,
   type AuthUser,
 } from '../common/auth.guard';
+import { GoogleWalletService } from '../loyalty/wallet.service';
+import { MailService } from '../mail/mail.service';
 import { AdminActivityService } from './admin-activity.service';
 import { AdminService } from './admin.service';
 
@@ -125,6 +128,13 @@ class SetPlanDto {
   plan: PlanId;
 }
 
+class TestEmailDto {
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(254)
+  to?: string;
+}
+
 class ExtendTrialDto {
   @Type(() => Number)
   @IsInt()
@@ -141,6 +151,8 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly billing: BillingService,
     private readonly activityService: AdminActivityService,
+    private readonly mail: MailService,
+    private readonly wallet: GoogleWalletService,
   ) {}
 
   @Get('overview')
@@ -156,6 +168,22 @@ export class AdminController {
   @Get('system')
   system() {
     return this.activityService.system();
+  }
+
+  /** Sends a test email (to the admin, or another address) and returns Resend's answer. */
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @HttpCode(200)
+  @Post('system/test-email')
+  testEmail(@CurrentUser() user: AuthUser, @Body() body: TestEmailDto) {
+    return this.mail.sendTest(body.to ?? user.email);
+  }
+
+  /** Signs in to Google Wallet and returns a test pass to save. */
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @HttpCode(200)
+  @Post('system/test-wallet')
+  testWallet() {
+    return this.wallet.testPass();
   }
 
   @Get('accounts')
