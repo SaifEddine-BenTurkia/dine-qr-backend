@@ -137,17 +137,17 @@ describe('Loyalty (e2e)', () => {
       .expect(404);
 
     await http()
-      .put('/loyalty/program')
+      .patch('/loyalty/program')
       .set(bearer(owner.token))
       .send({ stampsRequired: 2 })
       .expect(400);
     await http()
-      .put('/loyalty/program')
+      .patch('/loyalty/program')
       .set(bearer(owner.token))
       .send({ backgroundColor: 'red' })
       .expect(400);
     const saved = await http()
-      .put('/loyalty/program')
+      .patch('/loyalty/program')
       .set(bearer(owner.token))
       .send({
         enabled: true,
@@ -161,7 +161,7 @@ describe('Loyalty (e2e)', () => {
     expect(saved.body).toMatchObject({ enabled: true, stampsRequired: 3 });
     // Staff do not edit the program.
     await http()
-      .put('/loyalty/program')
+      .patch('/loyalty/program')
       .set(bearer(cashier))
       .send({ stampsRequired: 5 })
       .expect(403);
@@ -272,7 +272,7 @@ describe('Loyalty (e2e)', () => {
 
   it('skips the stamp under the minimum spend, then gives the reward once', async () => {
     await http()
-      .put('/loyalty/program')
+      .patch('/loyalty/program')
       .set(bearer(owner.token))
       .send({ minSpend: 5 })
       .expect(200);
@@ -339,7 +339,7 @@ describe('Loyalty (e2e)', () => {
       },
     });
     const refused = await http()
-      .put('/loyalty/program')
+      .patch('/loyalty/program')
       .set(bearer(owner.token))
       .send({ rewardText: 'Un dessert offert' })
       .expect(403);

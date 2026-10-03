@@ -7,7 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Put,
+  Patch,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -145,7 +145,7 @@ export class LoyaltyController {
   }
 
   @ForRole('restaurant')
-  @Put('program')
+  @Patch('program')
   saveProgram(@CurrentUser() user: AuthUser, @Body() body: ProgramDto) {
     return this.loyalty.saveProgram(user.id, body);
   }
