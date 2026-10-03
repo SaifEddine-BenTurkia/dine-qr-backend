@@ -13,11 +13,13 @@ import { HealthModule } from './health/health.module';
 import { InsightsModule } from './insights/insights.module';
 import { MediaModule } from './media/media.module';
 import { MenuModule } from './menu/menu.module';
+import { OrdersModule } from './orders/orders.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PublicMenuModule } from './public-menu/public-menu.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
 import { ServiceModule } from './service/service.module';
 import { SharedModule } from './shared.module';
+import { StaffModule } from './staff/staff.module';
 import { TablesModule } from './tables/tables.module';
 
 @Module({
@@ -44,6 +46,8 @@ import { TablesModule } from './tables/tables.module';
     InsightsModule,
     AiModule,
     TablesModule,
+    StaffModule,
+    OrdersModule,
     ServiceModule,
     AdminModule,
   ],

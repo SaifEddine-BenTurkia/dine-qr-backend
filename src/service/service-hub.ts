@@ -20,7 +20,10 @@ export type HubEvent =
       table: string | null;
       comment: string | null;
     }
-  | { kind: 'menu'; dishId: string };
+  | { kind: 'menu'; dishId: string }
+  | { kind: 'order'; id: string; number: number; table: string | null }
+  | { kind: 'order-update'; id: string; status: string }
+  | { kind: 'bill'; id: string };
 
 interface Envelope {
   restaurantId: string;

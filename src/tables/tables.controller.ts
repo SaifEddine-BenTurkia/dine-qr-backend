@@ -21,7 +21,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { CurrentUser, JwtAuthGuard, type AuthUser } from '../common/auth.guard';
+import {
+  CurrentUser,
+  ForRole,
+  JwtAuthGuard,
+  type AuthUser,
+} from '../common/auth.guard';
 import { TablesService } from './tables.service';
 
 const trim = ({ value }: { value: unknown }) =>
@@ -83,6 +88,8 @@ class UpdateTableDto {
 export class TablesController {
   constructor(private readonly tables: TablesService) {}
 
+  // The caisse lists tables too.
+  @ForRole('restaurant', 'staff')
   @Get()
   list(@CurrentUser() user: AuthUser) {
     return this.tables.list(user.id);

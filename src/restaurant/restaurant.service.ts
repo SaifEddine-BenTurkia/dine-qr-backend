@@ -149,5 +149,10 @@ export function toRestaurantView(restaurant: Restaurant) {
         'fr',
       ]),
     ],
+    orderingEnabled: restaurant.orderingEnabled,
+    receiptAddress: restaurant.receiptAddress,
+    receiptPhone: restaurant.receiptPhone,
+    taxId: restaurant.taxId,
+    receiptFooter: restaurant.receiptFooter,
   };
 }

@@ -26,6 +26,13 @@ export class RestaurantAccessService {
       where: { userId },
       select: { id: true },
     });
-    return restaurant?.id ?? null;
+    if (restaurant) return restaurant.id;
+    // Staff sessions carry a StaffMember id (the guard only lets them reach
+    // routes marked for staff).
+    const staff = await this.prisma.staffMember.findUnique({
+      where: { id: userId },
+      select: { restaurantId: true, active: true },
+    });
+    return staff?.active ? staff.restaurantId : null;
   }
 }
