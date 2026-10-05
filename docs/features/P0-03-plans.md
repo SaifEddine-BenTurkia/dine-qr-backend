@@ -18,7 +18,8 @@
   | Counter sales, daily closing | | | yes |
   | Stock, expiry, anti-waste, promo prices | | | yes |
 
-- **Trial = everything unlocked** (reverse trial). After a payment the paid pack applies at once
+- **Trial = 14 days of Standard** (owner decision 2026-10-05; it used to unlock everything). An
+  admin can still gift a higher pack during the trial. After a payment the paid pack applies at once
   and the time is added after what the owner still has.
 - A refused feature answers `403 { code: "PLAN_REQUIRED", requiredPlan }`; the apps show an upgrade
   panel. The guest menu only offers what the pack includes (`features` in the public menu).
@@ -29,7 +30,7 @@
   `PlanGate` / `UpgradePanel`, locks in the navigation, pack shown in the admin console.
 
 ## Acceptance
-- [x] e2e: trial unlocks all; Premium opens ordering and 5 staff but not counter sales or closing;
+- [x] e2e: the trial is 14 days of Standard; Premium opens ordering and 5 staff but not counter sales or closing;
       Standard closes calls, ordering, languages beyond fr/ar, staff login; admin sets a pack
 - [x] Browser: Standard owner sees the upgrade panel and the three packs
 

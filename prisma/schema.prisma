@@ -239,8 +239,8 @@ model Subscription {
   userId           String             @unique
   status           SubscriptionStatus
   currency         String             @default("TND")
-  // standard | premium | business (src/billing/plan-catalog.ts). During the
-  // trial everything is unlocked whatever this says.
+  // standard | premium | business (src/billing/plan-catalog.ts). The free
+  // trial is Standard; higher plans come from a payment or an admin gift.
   plan             String             @default("standard")
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?

@@ -2,6 +2,18 @@
 
 Newest first. One entry per feature, with what to test manually.
 
+## TR-01 Free trial: 14 days of Standard (2026-10-05)
+
+- **The free trial now lasts 14 days instead of 30 and covers the Standard pack only** (digital
+  menu, QR codes, French and Arabic). Ordering, the caisse, service calls, loyalty, staff, counter
+  sales and stock need a Premium or Business payment, or an admin gift ("Pack" in the console).
+- The trial length is fixed in the code; `TRIAL_DAYS` in the server's env file is no longer read.
+- Trials started before this change keep their end date but switch to Standard at once.
+
+**Test manually:** create a new account and a restaurant → Abonnement shows "14 jours d'essai" and
+the Standard pack; Commandes and Stock show the upgrade panel. In the console, set the pack to
+Business → those pages open.
+
 ## EM-01 Account emails for everyone, Google Wallet ready (2026-10-03)
 
 - **Email confirmation and password reset are sent to every account** (other emails still wait

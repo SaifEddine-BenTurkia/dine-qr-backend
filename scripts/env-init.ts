@@ -27,7 +27,6 @@ const defaults: Record<string, string> = {
   CORS_ORIGINS: 'http://localhost:5173',
   DATABASE_URL: 'postgresql://tableqr:tableqr@localhost:5434/tableqr',
   JWT_EXPIRES_IN: '7d',
-  TRIAL_DAYS: '30',
   RESEND_FROM_EMAIL: 'TableQR <onboarding@resend.dev>',
   CLOUDINARY_FOLDER: 'tableqr-dev',
   GOOGLE_REVIEWS_WRITE_MODE: 'dry_run',

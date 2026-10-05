@@ -153,7 +153,8 @@ adviser:** declare the processing before real customers join; the consent text i
   Membership model for several outlets per account comes with the Business plan's multi-outlet.
 - **A6.** A service day runs from 05:00 to 05:00 Tunis time (order numbers and the closing).
 - **A7.** Receipts say "Ticket non fiscal": TableQR is not a certified fiscal cash register.
-- **A8.** The trial unlocks every feature (the owner tries everything, then picks a pack).
+- **A8.** ~~The trial unlocks every feature.~~ Replaced by an owner decision on 2026-10-05: the
+  trial lasts 14 days and covers the Standard pack only (`TRIAL_DAYS` in `plan-catalog.ts`).
 - **A9.** A pack payment applies the pack at once and adds the time after what remains; there is no
   pro-rata when changing pack mid-period (payments are manual, the admin can adjust).
 - **A10.** Stock is held when an order is created, and returned if it is refused or cancelled.

@@ -24,6 +24,7 @@ import {
   buildCatalog,
   effectivePlan,
   isPlanId,
+  TRIAL_DAYS,
   type Catalog,
   type PlanId,
 } from './plan-catalog';
@@ -52,7 +53,6 @@ export class BillingService {
   private readonly pricePerMonth: number;
   private readonly plans: Plan[];
   private readonly catalog: Catalog;
-  private readonly trialDays: number;
   private readonly contact: PaymentContact;
 
   constructor(
@@ -79,7 +79,6 @@ export class BillingService {
       },
       this.plans,
     );
-    this.trialDays = Number(config.get<string>('TRIAL_DAYS') ?? 30) || 30;
     this.contact = {
       whatsapp: config.get<string>('PAYMENT_WHATSAPP') || null,
       email: config.get<string>('PAYMENT_CONTACT_EMAIL') || null,
@@ -106,7 +105,8 @@ export class BillingService {
           userId,
           status: 'trialing',
           currency: CURRENCY,
-          trialEndsAt: new Date(Date.now() + this.trialDays * DAY_MS),
+          plan: 'standard',
+          trialEndsAt: new Date(Date.now() + TRIAL_DAYS * DAY_MS),
         },
       });
       return this.view(subscription, null);
@@ -400,7 +400,7 @@ export class BillingService {
     const plan = effectivePlan(subscription);
     return {
       status: effectiveStatus(subscription),
-      // What applies now (everything during the trial) and what was paid for.
+      // What applies now (Standard during the trial) and what was paid for.
       plan,
       paidPlan:
         subscription && isPlanId(subscription.plan) ? subscription.plan : null,
