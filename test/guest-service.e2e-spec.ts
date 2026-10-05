@@ -55,6 +55,11 @@ describe('Guest service (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ name: `Resto ${i}`, slug })
         .expect(201);
+      // The trial is Standard; these tests need every feature.
+      await prisma.subscription.update({
+        where: { userId: user.id },
+        data: { plan: 'business' },
+      });
       owners.push({ email, token, slug });
     }
   });

@@ -17,7 +17,7 @@ repos, on top of the merged ordering work.
   (navigation, home, settings, guest ordering).
 - **Blocked on the owner:** merge of the two PRs (Q4); Google Wallet issuer account (Q10); real
   phone check of notifications (Q11); thermal printer (Q9); key rotation (Q1).
-- **Assumptions:** A8 (trial unlocks everything), A9 (a pack payment applies at once), A10 (stock
+- **Assumptions:** A8 (replaced 2026-10-05: trial = 14 days of Standard), A9 (a pack payment applies at once), A10 (stock
   held when the order is created), A11 (push keys kept in the database), A12 (multi-outlet not sold
   yet), A13 (CSP still report-only).
 - **Next:** verify the deploy and notifications on real devices, enforce the CSP, then P1-10 print
@@ -75,6 +75,7 @@ S-03, S-04, then P1-10, P1-11, P7. Dropped: online payments, Google reviews hub,
 
 | ID | Feature | Status | Note |
 | --- | --- | --- | --- |
+| TR-01 | Free trial: 14 days of Standard | done | Trial no longer unlocks every pack; A8 replaced |
 | EM-01 | Account emails for everyone, Google Wallet ready | done (delivery waits for Q8, Wallet for Q10) | Console checks for both |
 | UX-03 | Professional landing page, open sign-up | done | New accounts work at once; admin emails must still be confirmed |
 | UX-02 | Professional look, full-screen caisse | done | Theme, shell, order cards, "Plein écran" kept per device; frontend branch feat/ui-pro |

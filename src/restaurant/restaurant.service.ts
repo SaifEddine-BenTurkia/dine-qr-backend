@@ -2,13 +2,13 @@ import {
   EntitlementsService,
   planRequired,
 } from '../billing/entitlements.service';
+import { TRIAL_DAYS } from '../billing/plan-catalog';
 import {
   ConflictException,
   Injectable,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Prisma, type Restaurant } from '@prisma/client';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,7 +24,6 @@ export class RestaurantService {
     private readonly prisma: PrismaService,
     private readonly access: RestaurantAccessService,
     private readonly media: MediaService,
-    private readonly config: ConfigService,
     private readonly entitlements: EntitlementsService,
   ) {}
 
@@ -43,7 +42,6 @@ export class RestaurantService {
     if (existing) {
       throw new ConflictException('Vous avez déjà un restaurant');
     }
-    const trialDays = Number(this.config.get<string>('TRIAL_DAYS') ?? 30) || 30;
     try {
       const restaurant = await this.prisma.$transaction(async (tx) => {
         const created = await tx.restaurant.create({
@@ -58,7 +56,10 @@ export class RestaurantService {
           create: {
             userId,
             status: 'trialing',
-            trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000),
+            plan: 'standard',
+            trialEndsAt: new Date(
+              Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
+            ),
           },
           update: {},
         });

@@ -56,6 +56,11 @@ describe('Loyalty (e2e)', () => {
       .set(bearer(target.token))
       .send({ name: 'Café fidèle', slug: target.slug })
       .expect(201);
+    // The trial is Standard; these tests need every feature.
+    await prisma.subscription.update({
+      where: { userId: user.id },
+      data: { plan: 'business' },
+    });
   }
 
   /** A counter sale paid in cash, with or without a loyalty card. */

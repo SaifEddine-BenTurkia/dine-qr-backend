@@ -48,7 +48,7 @@ is not built and is not sold. See PROGRESS.md.
 | O-03 | Ticket printing | Kitchen ticket and customer receipt, 80/58 mm, browser print; auto-print with Chrome kiosk printing; ESC/POS bridge later |
 | O-04 | Bill and payment at the counter | Bill per table, cash/card, discount, close table, daily Z report (totals by payment method) |
 | O-05 | Counter sales | Quick product grid on the caisse for takeaway and counter orders |
-| P0-03 | Plans and entitlements | The three plans below, a 14-day trial with everything unlocked |
+| P0-03 | Plans and entitlements | The three plans below, a 14-day trial on Standard (owner decision 2026-10-05) |
 | L-01 | Loyalty program | Stamps (e.g. 9 coffees = 1 free), enrolment by QR (name + phone), stamp at payment |
 | L-02 | Google Wallet card | Loyalty pass that updates when stamps change; sandbox (demo issuer) until Google approves |
 | L-03 | Card designer | Logo, colours, banner, reward text, live preview in the dashboard |

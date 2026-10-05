@@ -116,24 +116,28 @@ describe('Plans and entitlements (e2e)', () => {
     await app.close();
   });
 
-  it('unlocks everything during the trial and lists the three plans', async () => {
+  it('gives a 14-day Standard trial and lists the three plans', async () => {
     const sub = await http()
       .get('/subscription')
       .set(bearer(owner))
       .expect(200);
     expect(sub.body).toMatchObject({
       status: 'trialing',
-      plan: 'business',
+      plan: 'standard',
       entitlements: {
-        ordering: true,
-        serviceCalls: true,
-        loyalty: true,
-        counterSales: true,
-        stock: true,
-        maxStaff: null,
-        locales: 'all',
+        ordering: false,
+        serviceCalls: false,
+        loyalty: false,
+        counterSales: false,
+        stock: false,
+        maxStaff: 0,
+        locales: ['fr', 'ar'],
       },
     });
+    const trialDays =
+      (new Date(sub.body.trialEndsAt).getTime() - Date.now()) / 86_400_000;
+    expect(trialDays).toBeGreaterThan(13.9);
+    expect(trialDays).toBeLessThanOrEqual(14);
     expect(
       sub.body.catalog.map(
         (p: { id: string; pricePerMonth: number; offers: unknown[] }) => [
@@ -169,13 +173,17 @@ describe('Plans and entitlements (e2e)', () => {
       ],
     ]);
 
+    // Ordering is a Premium feature, even during the trial.
     await http()
       .patch('/restaurant')
       .set(bearer(owner))
-      .send({ orderingEnabled: true, enabledLocales: ['fr', 'ar', 'en'] })
-      .expect(200);
+      .send({ orderingEnabled: true })
+      .expect(403);
     const menu = await http().get(`/public/menu/${slug}`).expect(200);
-    expect(menu.body.features).toEqual({ serviceCalls: true, ordering: true });
+    expect(menu.body.features).toEqual({
+      serviceCalls: false,
+      ordering: false,
+    });
   });
 
   it('sells Premium: ordering and staff, but not counter sales', async () => {
@@ -206,6 +214,11 @@ describe('Plans and entitlements (e2e)', () => {
       paidPlan: 'premium',
       entitlements: { ordering: true, counterSales: false, maxStaff: 5 },
     });
+    await http()
+      .patch('/restaurant')
+      .set(bearer(owner))
+      .send({ orderingEnabled: true, enabledLocales: ['fr', 'ar', 'en'] })
+      .expect(200);
 
     // Table ordering and the caisse work…
     const order = await http()

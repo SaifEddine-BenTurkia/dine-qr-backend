@@ -1,5 +1,4 @@
 import type { Subscription } from '@prisma/client';
-import { effectiveStatus } from './subscription-status';
 
 /**
  * The three plans (docs/ROADMAP.md). Standard replaces the paper menu,
@@ -73,22 +72,18 @@ export function isPlanId(value: unknown): value is PlanId {
   return (PLAN_IDS as readonly unknown[]).includes(value);
 }
 
+/** Length of the free trial. It covers the Standard plan only. */
+export const TRIAL_DAYS = 14;
+
 /**
- * The plan the product acts on. During the free trial everything is unlocked
- * (the owner tries the whole product, then chooses); afterwards it is the plan
- * that was paid for.
+ * The plan the product acts on: the plan stored on the subscription. A new
+ * trial is Standard (the column default); Premium and Business are unlocked
+ * by a payment, or by an admin gift (setPlan), never by the trial itself.
  */
 export function effectivePlan(
-  subscription: Pick<
-    Subscription,
-    'status' | 'trialEndsAt' | 'currentPeriodEnd' | 'plan'
-  > | null,
-  now = new Date(),
+  subscription: Pick<Subscription, 'plan'> | null,
 ): PlanId {
   if (!subscription) return 'standard';
-  if (effectiveStatus(subscription as Subscription, now) === 'trialing') {
-    return 'business';
-  }
   return isPlanId(subscription.plan) ? subscription.plan : 'standard';
 }
 
